@@ -10,7 +10,7 @@
     "bit32": "disable"
   },
   "workspace.library": ["edgetx-lua-stdlib"],
-  "workspace.ignoreDir": ["bin", "edgetx-lua-stdlib"],
+  "workspace.ignoreDir": ["bin", "edgetx-lua-stdlib", "legacy"],
   "workspace.checkThirdParty": false,
   "diagnostics.disable": ["lowercase-global"]
 }
