@@ -1,16 +1,31 @@
 ---------------------------------------------------------------------------
--- Color LCD Startup Dialogs                                             --
+-- Color LCD Dialogs                                                     --
 -- Loaded via loadScript() with no arguments; returns the Dialogs table. --
--- Shared by every tool's LVGL UI.                                       --
+-- Shared by every tool's LVGL UI; the widgets' full-screen pages reuse  --
+-- the no-module checklist.                                              --
 --                                                                       --
--- The two dialogs a tool can raise before it has a page: the EdgeTX     --
--- version gate and the missing-module notice. Both are terminal -- the  --
--- only way out is exiting the tool -- so each takes the caller's        --
--- onExit and wires it to both the dialog's close box and its Exit       --
--- button.                                                               --
+-- The version gate and the missing-module notice are terminal -- the    --
+-- only way out is exiting the tool -- so each takes the caller's onExit --
+-- and wires it to both the dialog's close box and its Exit button.      --
 ---------------------------------------------------------------------------
 
 local Dialogs = {}
+
+function Dialogs.showConfirm(options)
+  return lvgl.confirm({
+    title = options.title,
+    message = options.message,
+    confirm = options.onConfirm,
+    cancel = options.onCancel,
+  })
+end
+
+function Dialogs.showMessage(options)
+  return lvgl.message({
+    title = options.title,
+    message = options.message,
+  })
+end
 
 --- Build a full-screen dialog: a column of text lines over a single Exit
 -- button. lines are label descriptors ({ text = ..., font = ... }), used
@@ -55,27 +70,36 @@ local function buildExitDialog(title, lines, onExit)
   return dg
 end
 
---- The EdgeTX version gate. Keep the versions in step with the ladder in
--- SCRIPTS/ELRS/edgetx_version.lua, which decides when this is shown.
-function Dialogs.showVersionRequired(onExit)
-  return buildExitDialog("EdgeTX Version Not Supported", {
-    { type = lvgl.LABEL, text = "Requires EdgeTX:" },
-    { type = lvgl.LABEL, text = "- 2.11.6 or later" },
-    { type = lvgl.LABEL, text = "- 2.12.1 or later" },
-    { type = lvgl.LABEL, text = "- 3.0 or later" },
-  }, onExit)
+--- The EdgeTX version gate.
+-- @param versions  REQUIRED_VERSIONS from SCRIPTS/ELRS/edgetx_version.lua
+function Dialogs.showVersionRequired(versions, onExit)
+  local lines = { { type = lvgl.LABEL, text = "Requires EdgeTX:" } }
+  for i, version in ipairs(versions) do
+    lines[i + 1] = { type = lvgl.LABEL, text = version }
+  end
+  return buildExitDialog("EdgeTX Version Not Supported", lines, onExit)
+end
+
+--- Label rows listing what to check when no CRSF module is found.
+-- @param color  optional text color
+function Dialogs.noModuleChecklist(color)
+  return {
+    { type = lvgl.LABEL, color = color, text = "- Internal/External module enabled" },
+    {
+      type = lvgl.LABEL,
+      color = color,
+      font = SMLSIZE,
+      text = "  Internal: set Internal RF type to CRSF in SYS > Hardware",
+    },
+    { type = lvgl.LABEL, color = color, text = "- Protocol set to CRSF" },
+    { type = lvgl.LABEL, color = color, text = "- Suggested baud rate (depends on packet rate):" },
+    { type = lvgl.LABEL, color = color, font = SMLSIZE, text = "  400k for 250Hz, 921k for 500Hz, 1.87M for 1000Hz" },
+  }
 end
 
 --- No CRSF module configured on the model.
 function Dialogs.showNoModule(onExit)
-  return buildExitDialog("No Module Found: Check Model Settings", {
-    { type = lvgl.LABEL, text = "- Internal/External module enabled" },
-    { type = lvgl.LABEL, text = "- Protocol set to CRSF" },
-    { type = lvgl.LABEL, text = "- Minimum Baud rate (depends on packet rate):" },
-    { type = lvgl.LABEL, font = SMLSIZE, text = "  400k for 250Hz" },
-    { type = lvgl.LABEL, font = SMLSIZE, text = "  921k for 500Hz" },
-    { type = lvgl.LABEL, font = SMLSIZE, text = "  1.87M for F1000" },
-  }, onExit)
+  return buildExitDialog("No Module Found: Check Model Settings", Dialogs.noModuleChecklist(), onExit)
 end
 
 return Dialogs

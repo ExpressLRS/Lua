@@ -11,7 +11,7 @@ local msp = deps.msp
 local VERSION = deps.VERSION
 
 local TextEdit = loadScript("/SCRIPTS/ELRS/ui/lcd/text_edit.lua")()
-local drawAlert = loadScript("/SCRIPTS/ELRS/ui/lcd/alert.lua")()
+local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lcd/dialogs.lua")()
 
 -- ============================================================================
 -- UI state
@@ -77,39 +77,23 @@ function UI.init()
 end
 
 -- ============================================================================
--- Interface: preCheck (version gate)
+-- Interface: preCheck (version and module gates)
 -- ============================================================================
 
 function UI.preCheck(event)
   if not deps.versionOk then
-    drawAlert("Unsupported", {
-      "Requires EdgeTX:",
-      "- 2.11.6 or later",
-      "- 2.12.1 or later",
-      "- 3.0 or later",
-    })
+    Dialogs.drawVersionRequired(deps.requiredVersions)
     if event == EVT_VIRTUAL_EXIT then
       App.shouldExit = true
       return 2
     end
     return 0
   end
+  if not App.checkCrsfModule() then
+    Dialogs.drawNoModule()
+    return 0
+  end
   return nil
-end
-
--- ============================================================================
--- Interface: handleNoModule
--- ============================================================================
-
-function UI.handleNoModule()
-  drawAlert(" No ExpressLRS", {
-    "Enable a CRSF Internal",
-    "  or External module in",
-    "      Model settings",
-    " If module is internal",
-    "also set Internal RF to",
-    "CRSF in SYS->Hardware",
-  })
 end
 
 -- ============================================================================

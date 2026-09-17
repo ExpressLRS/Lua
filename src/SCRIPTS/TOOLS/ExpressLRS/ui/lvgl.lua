@@ -11,7 +11,7 @@ local session = deps.session
 local crsf = deps.crsf
 local VERSION = deps.VERSION
 
-local SharedDialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
+local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
 
 -- ============================================================================
 -- UI state
@@ -30,28 +30,6 @@ local UI = {
   commandDialog = nil,
   commandPage = nil,
 }
-
--- ============================================================================
--- Dialogs Module: Generic LVGL wrappers
--- ============================================================================
-
-local Dialogs = {}
-
-function Dialogs.showConfirm(options)
-  return lvgl.confirm({
-    title = options.title,
-    message = options.message,
-    confirm = options.onConfirm,
-    cancel = options.onCancel,
-  })
-end
-
-function Dialogs.showMessage(options)
-  return lvgl.message({
-    title = options.title,
-    message = options.message,
-  })
-end
 
 -- ============================================================================
 -- ModelMismatchDialog
@@ -109,10 +87,6 @@ function ModelMismatchDialog.show(onContinue, onExit)
 
   return dg
 end
-
--- ============================================================================
--- Startup dialogs (version gate, no module): SCRIPTS/ELRS/ui/lvgl/dialogs.lua
--- ============================================================================
 
 local function exitTool()
   App.shouldExit = true
@@ -308,22 +282,25 @@ end
 function UI.init() end
 
 -- ============================================================================
--- Interface: preCheck (version gate)
+-- Interface: preCheck (version and module gates)
 -- ============================================================================
 
 function UI.preCheck(_event)
-  if not deps.versionOk then
-    if not UI.uiBuilt then
-      SharedDialogs.showVersionRequired(exitTool)
-      UI.uiBuilt = true
-    end
-    if App.shouldExit then
-      return 2
-    end
-    return 0
+  if deps.versionOk and App.checkCrsfModule() then
+    return nil
   end
-
-  return nil
+  if not UI.uiBuilt then
+    if deps.versionOk then
+      Dialogs.showNoModule(exitTool)
+    else
+      Dialogs.showVersionRequired(deps.requiredVersions, exitTool)
+    end
+    UI.uiBuilt = true
+  end
+  if App.shouldExit then
+    return 2
+  end
+  return 0
 end
 
 -- ============================================================================
@@ -349,17 +326,6 @@ end
 function UI.onNewDevice()
   if Navigation.getCurrent() == Navigation.FOLDER_OTHER_DEVICES or UI.folderWasReady then
     UI.invalidate()
-  end
-end
-
--- ============================================================================
--- Interface: handleNoModule
--- ============================================================================
-
-function UI.handleNoModule()
-  if not UI.uiBuilt then
-    SharedDialogs.showNoModule(exitTool)
-    UI.uiBuilt = true
   end
 end
 
