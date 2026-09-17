@@ -7,8 +7,9 @@
 -- draw_functions.cpp:178), so editing a string in a tool feels exactly  --
 -- like editing a model name: the cursor starts on the first char,       --
 -- rotary cycles that char through the name charset (clamped at the      --
--- ends, case preserved), ENTER advances the cursor, ENTER on the last   --
--- cell or long ENTER on a space commits, and long ENTER on a letter     --
+-- ends, case preserved), ENTER advances the cursor, PAGE keys move it   --
+-- back and forth within the value, ENTER on the last cell or long       --
+-- ENTER on a space commits, and long ENTER on a letter                  --
 -- toggles its case. EXIT also commits -- edits are applied to the       --
 -- value as they are made, never reverted. Trailing spaces are stripped  --
 -- on commit; deletion is overwriting with spaces.                       --
@@ -65,13 +66,18 @@ function TextEdit:start()
   self.cur = 1
 end
 
---- Replace the char under the cursor, padding with spaces when the
--- cursor sits past the end of the value.
-function TextEdit:_setChar(c)
+--- The value padded with spaces up to the cursor.
+function TextEdit:_padded()
   local v = self.value
   while #v < self.cur - 1 do
     v = v .. " "
   end
+  return v
+end
+
+--- Replace the char under the cursor.
+function TextEdit:_setChar(c)
+  local v = self:_padded()
   self.value = string.sub(v, 1, self.cur - 1) .. c .. string.sub(v, self.cur + 1)
 end
 
@@ -98,6 +104,15 @@ end
 function TextEdit:handleEvent(event)
   local c = self:_charAt(self.cur)
 
+  if
+    event == EVT_VIRTUAL_EXIT
+    or (event == EVT_VIRTUAL_ENTER and self.cur >= self.maxLen)
+    or (event == EVT_VIRTUAL_ENTER_LONG and c == " ")
+  then
+    self:_commit()
+    return true
+  end
+
   if event == EVT_VIRTUAL_NEXT or event == EVT_VIRTUAL_PREV then
     local idx = charIdx(c)
     if event == EVT_VIRTUAL_NEXT then
@@ -110,38 +125,21 @@ function TextEdit:handleEvent(event)
       nc = string.char(string.byte(nc) - 32)
     end
     self:_setChar(nc)
-    return nil
-  end
-
-  if event == EVT_VIRTUAL_ENTER then
-    if self.cur < self.maxLen then
+  elseif event == EVT_VIRTUAL_ENTER then
+    self.cur = self.cur + 1
+  elseif event == EVT_VIRTUAL_NEXT_PAGE then
+    if self.cur <= #self.value and self.cur < self.maxLen then
       self.cur = self.cur + 1
-    else
-      self:_commit()
-      return true
     end
-    return nil
-  end
-
-  if event == EVT_VIRTUAL_ENTER_LONG then
-    killEvents(event)
-    if c == " " then
-      self:_commit()
-      return true
-    elseif isUpper(c) then
+  elseif event == EVT_VIRTUAL_PREV_PAGE then
+    self.cur = math.max(self.cur - 1, 1)
+  elseif event == EVT_VIRTUAL_ENTER_LONG then
+    if isUpper(c) then
       self:_setChar(string.char(string.byte(c) + 32))
     elseif isLower(c) then
       self:_setChar(string.char(string.byte(c) - 32))
     end
-    return nil
   end
-
-  if event == EVT_VIRTUAL_EXIT then
-    self:_commit()
-    return true
-  end
-
-  return nil
 end
 
 --- Draw the value at (x, y). attr is the row's base attribute (INVERS on
@@ -164,12 +162,13 @@ function TextEdit:draw(x, y, attr)
   if self.visible and self.cur > self.visible then
     first = self.cur - self.visible + 1
   end
-  local prefix = string.sub(self.value, first, self.cur - 1)
+  local v = self:_padded()
+  local prefix = string.sub(v, first, self.cur - 1)
   local suffix = ""
   if self.visible then
-    suffix = string.sub(self.value, self.cur + 1, first + self.visible - 1)
+    suffix = string.sub(v, self.cur + 1, first + self.visible - 1)
   else
-    suffix = string.sub(self.value, self.cur + 1)
+    suffix = string.sub(v, self.cur + 1)
   end
 
   lcd.drawText(x, y, prefix)
