@@ -33,9 +33,7 @@ local versionOk = loader("/SCRIPTS/ELRS/edgetx_version.lua")()
 
 -- Scheduler constants (getTime() ticks of 10 ms)
 local UID_RETRY_TICKS = 50 -- resend an unanswered UID read after 500 ms
--- 6 s of retries: outlasts the module reboot after a phrase write. Past
--- that, give up: the device has no MSP config support.
-local UID_MAX_ATTEMPTS = 12
+local UID_MAX_ATTEMPTS = 12 -- 6s of retries while module reboots
 local FOLLOWUP_TICKS = 100 -- settle time before a follow-up after a write
 
 local App = {
