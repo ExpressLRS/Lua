@@ -64,6 +64,7 @@ end
 function TextEdit:start()
   self.editing = true
   self.cur = 1
+  self.long = nil
 end
 
 --- The value padded with spaces up to the cursor.
@@ -79,6 +80,16 @@ end
 function TextEdit:_setChar(c)
   local v = self:_padded()
   self.value = string.sub(v, 1, self.cur - 1) .. c .. string.sub(v, self.cur + 1)
+end
+
+--- Swap the case of the char under the cursor.
+function TextEdit:_toggleCase()
+  local c = self:_charAt(self.cur)
+  if isUpper(c) then
+    self:_setChar(string.char(string.byte(c) + 32))
+  elseif isLower(c) then
+    self:_setChar(string.char(string.byte(c) - 32))
+  end
 end
 
 function TextEdit:_charAt(pos)
@@ -104,16 +115,28 @@ end
 function TextEdit:handleEvent(event)
   local c = self:_charAt(self.cur)
 
+  -- ENTER still breaks after a long press, and Lua cannot killEvents() it,
+  -- so the long action runs on that break and swallows it
+  local long = self.long
+  if event == EVT_VIRTUAL_ENTER_LONG then
+    self.long = true
+    return
+  elseif event == EVT_VIRTUAL_ENTER then
+    self.long = nil
+  end
+
   if
     event == EVT_VIRTUAL_EXIT
-    or (event == EVT_VIRTUAL_ENTER and self.cur >= self.maxLen)
-    or (event == EVT_VIRTUAL_ENTER_LONG and c == " ")
+    or (event == EVT_VIRTUAL_ENTER and long and c == " ")
+    or (event == EVT_VIRTUAL_ENTER and not long and self.cur >= self.maxLen)
   then
     self:_commit()
     return true
   end
 
-  if event == EVT_VIRTUAL_NEXT or event == EVT_VIRTUAL_PREV then
+  if event == EVT_VIRTUAL_ENTER and long then
+    self:_toggleCase()
+  elseif event == EVT_VIRTUAL_NEXT or event == EVT_VIRTUAL_PREV then
     local idx = charIdx(c)
     if event == EVT_VIRTUAL_NEXT then
       idx = math.min(idx + 1, #CHARS)
@@ -133,12 +156,6 @@ function TextEdit:handleEvent(event)
     end
   elseif event == EVT_VIRTUAL_PREV_PAGE then
     self.cur = math.max(self.cur - 1, 1)
-  elseif event == EVT_VIRTUAL_ENTER_LONG then
-    if isUpper(c) then
-      self:_setChar(string.char(string.byte(c) + 32))
-    elseif isLower(c) then
-      self:_setChar(string.char(string.byte(c) - 32))
-    end
   end
 end
 
