@@ -1106,10 +1106,42 @@ local function updateTlmBandwidth(device)
   telemRatio.units = " (" .. bandwidth .. "bps)"
 end
 
+--- Hide the VTX Admin fields that do nothing in the current config.
+-- Mirrors firmware updateVtxAdminOpts() from TXModuleParameters.cpp:
+-- Channel, Pwr Lvl and Pitmode hide while VTX Admin is disabled (Band/Enable
+-- at "Disabled"), and Pitmode also hides at Pwr Lvl "-" because pit mode is
+-- only sent as part of the power byte. Send VTx hides with them too -- a
+-- rule the firmware holds back because a COMMAND's hidden bit only reaches
+-- the Lua script if a write re-reads its COMMAND siblings; applying it here
+-- exercises that re-read.
+-- @param device  the device table whose params to update
+local function updateVtxAdminOpts(device)
+  if device.id ~= CRSF.ADDRESS_TX then
+    return
+  end
+
+  -- VTX Administrator folder (id=10): children Band (id=11), Channel (id=12),
+  -- Pwr Lvl (id=13), Pitmode (id=14), Send VTx (id=15)
+  local vtxBand = findParam(device, 11)
+  local vtxChan = findParam(device, 12)
+  local vtxPwr = findParam(device, 13)
+  local vtxPit = findParam(device, 14)
+  local vtxSend = findParam(device, 15)
+  if vtxBand and vtxChan and vtxPwr and vtxPit and vtxSend then
+    local disabled = (vtxBand.value or 0) == 0
+    vtxChan.hidden = disabled or nil
+    vtxPwr.hidden = disabled or nil
+    vtxPit.hidden = (disabled or (vtxPwr.value or 0) == 0) or nil
+    vtxSend.hidden = disabled or nil
+  end
+end
+
 -- Set initial dynamic folder names based on default parameter values
 updateFolderNames(txDevice)
 -- Set initial telemetry bandwidth display
 updateTlmBandwidth(txDevice)
+-- Set initial VTX Admin field visibility
+updateVtxAdminOpts(txDevice)
 
 -- ============================================================================
 -- Scenario State
@@ -1548,10 +1580,11 @@ local function mockPush(command, data)
             end
           end
 
-          -- Defer folder name and bandwidth updates to the next poll cycle.
-          -- Real firmware runs updateFolderNames() in the event loop, not
-          -- in the PARAMETER_WRITE handler. No auto-send of parent folder
-          -- entry either -- the Lua script must explicitly PARAMETER_READ.
+          -- Defer folder name, bandwidth and visibility updates to the next
+          -- poll cycle. Real firmware runs updateFolderNamesAndVisibility()
+          -- in the event loop, not in the PARAMETER_WRITE handler. No
+          -- auto-send of parent folder entry either -- the Lua script must
+          -- explicitly PARAMETER_READ.
           folderNamesReadyAt = getTime() + FOLDER_NAMES_UPDATE_TICKS
           folderNamesDevice = device
         end
@@ -1633,6 +1666,7 @@ local function mockPop(consumer)
   if folderNamesDevice and getTime() >= folderNamesReadyAt then
     updateFolderNames(folderNamesDevice)
     updateTlmBandwidth(folderNamesDevice)
+    updateVtxAdminOpts(folderNamesDevice)
     folderNamesDevice = nil
   end
 

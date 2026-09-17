@@ -502,8 +502,9 @@ end
 -- ============================================================================
 
 -- Re-read what a value change can have altered: the parent folder (its name
--- may embed values) and every non-folder sibling (CRSF parameters on one
--- level are routinely interdependent -- option lists shrink, fields hide).
+-- may embed values) and every non-folder sibling, commands included (CRSF
+-- parameters on one level are routinely interdependent -- option lists
+-- shrink, fields and commands hide).
 function CRSFSession:_reloadRelated(field)
   if field.parent and self._fields[field.parent] then
     self._fields[field.parent].nameStale = true
@@ -514,7 +515,11 @@ function CRSFSession:_reloadRelated(field)
     local sibling = self._fields[fieldId]
     if sibling and fieldId ~= field.id and sibling.parent == field.parent then
       local siblingType = sibling.type or 99
-      if siblingType < crsf.CONST.FIELD_FOLDER or siblingType == crsf.CONST.FIELD_INFO then
+      if
+        siblingType < crsf.CONST.FIELD_FOLDER
+        or siblingType == crsf.CONST.FIELD_INFO
+        or siblingType == crsf.CONST.FIELD_COMMAND
+      then
         sibling.dirty = true
         sibling.reloading = true
         self._loadQueue[#self._loadQueue + 1] = fieldId
