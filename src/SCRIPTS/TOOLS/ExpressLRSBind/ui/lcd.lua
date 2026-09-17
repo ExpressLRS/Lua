@@ -259,7 +259,7 @@ end
 
 local function drawTitle()
   lcd.drawFilledRectangle(0, 0, LCD_W, UI.textSize + 1, GREY_DEFAULT)
-  lcd.drawText(UI.COL1 + 1, 1, "ExpressLRS Bind", INVERS)
+  lcd.drawText(UI.COL1 + 1, 1, "ExpressLRS Bind Tool", INVERS)
   -- Link flag: C while RX telemetry is alive, - otherwise
   lcd.drawText(LCD_W - 1, 1, crsf.hasTelemetry and "C" or "-", INVERS + RIGHT)
 end

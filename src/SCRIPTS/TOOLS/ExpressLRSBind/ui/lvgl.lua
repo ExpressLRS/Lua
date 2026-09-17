@@ -8,7 +8,6 @@ local deps = ...
 local App = deps.App
 local crsf = deps.crsf
 local msp = deps.msp
-local VERSION = deps.VERSION
 
 local SharedDialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
 
@@ -51,7 +50,7 @@ local function buildUi()
   lvgl.clear()
 
   local pg = lvgl.page({
-    title = "ExpressLRS Bind",
+    title = "ExpressLRS Bind Tool",
     subtitle = App.uidLine,
     back = exitTool,
   })
@@ -134,19 +133,10 @@ local function buildUi()
     },
   })
 
-  -- Everything below the settings stacks in one column; hidden sections take
-  -- no space, so the version row always ends the page.
-  local bottom = pg:box({
+  -- ***** Show Bind button if RX target selected and no RX connected *****
+  pg:box({
     w = lvgl.PERCENT_SIZE + 100,
     y = 2 * lvgl.UI_ELEMENT_HEIGHT + 4 * lvgl.PAD_MEDIUM,
-    flexFlow = lvgl.FLOW_COLUMN,
-    flexPad = 0,
-    borderPad = 0,
-  })
-
-  -- ***** Show Bind button if RX target selected and no RX connected *****
-  bottom:box({
-    w = lvgl.PERCENT_SIZE + 100,
     flexFlow = lvgl.FLOW_ROW,
     flexPad = lvgl.PAD_MEDIUM,
     align = LEFT,
@@ -166,8 +156,9 @@ local function buildUi()
   })
 
   -- ***** Bind Phrase History *****
-  local histSection = bottom:box({
+  local histSection = pg:box({
     w = lvgl.PERCENT_SIZE + 100,
+    y = 2 * lvgl.UI_ELEMENT_HEIGHT + 4 * lvgl.PAD_MEDIUM,
     flexFlow = lvgl.FLOW_COLUMN,
     flexPad = 0,
     visible = function()
@@ -207,18 +198,6 @@ local function buildUi()
       end,
     })
   end
-
-  bottom:setting({
-    w = lvgl.PERCENT_SIZE + 100,
-    title = "Lua script version",
-    children = {
-      {
-        type = lvgl.LABEL,
-        x = lvgl.PERCENT_SIZE + 50,
-        text = VERSION,
-      },
-    },
-  })
 end
 
 -- ============================================================================
