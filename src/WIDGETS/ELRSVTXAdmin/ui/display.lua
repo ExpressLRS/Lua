@@ -113,6 +113,14 @@ function VTXDisplay.statusText()
   return ""
 end
 
+--- Red for a missing module, muted for the other statuses.
+function VTXDisplay.statusColor()
+  if not VTXAdmin.hasModule() then
+    return RED
+  end
+  return COLOR_THEME_SECONDARY1
+end
+
 --- The hero and the active preset cell take the theme's accent -- the reading
 --- is what the widget exists to show, and the accent is what "the current one"
 --- looks like everywhere else in EdgeTX. A confirmed pit mode outranks it:
@@ -207,9 +215,8 @@ end
 --- once it is tuned the band and channel in the tier's display font with
 --- "Power 2" sat on its baseline beside it. Two children to append in order
 --- -- a hidden flex child costs no height, so only the live one takes a row.
---- The status takes the same display font as the reading it stands in for:
---- the two swap over one row, and at two sizes everything below them jumps
---- the moment the VTX loads.
+--- The status keeps the reading's row height, so nothing below jumps the
+--- moment the VTX loads, but in BOLD: it is background, not the reading.
 --- A plain box with absolute children rather than a flex row: small type
 --- beside a large number sits on its baseline, not its top, and flex has no
 --- way to say that. Same mechanics as the telemetry hero's caption -- the
@@ -222,14 +229,19 @@ function VTXDisplay.buildHero(font)
   -- the small text below the shared baseline by the difference in descent.
   local drop = math.max(0, math.floor((heroH - select(2, lcd.sizeText("0", SMLSIZE))) * 4 / 5))
   return {
-    type = lvgl.LABEL,
-    align = LEFT,
-    font = font,
-    -- The muted theme colour, not the text primary: at the hero size a black
-    -- "Loading..." reads as the reading itself, and a status is background.
-    color = COLOR_THEME_SECONDARY1,
-    text = VTXDisplay.statusText,
+    type = lvgl.BOX,
+    h = heroH,
     visible = VTXDisplay.showStatus,
+    children = {
+      {
+        type = lvgl.LABEL,
+        x = 0,
+        y = math.max(0, math.floor((heroH - select(2, lcd.sizeText("0", BOLD))) / 2)),
+        font = BOLD,
+        color = VTXDisplay.statusColor,
+        text = VTXDisplay.statusText,
+      },
+    },
   }, {
     type = lvgl.BOX,
     h = heroH,

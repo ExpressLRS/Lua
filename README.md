@@ -27,10 +27,10 @@ SCRIPTS/
     edgetx_version.lua        -- EdgeTX minimum-version gate (both tools)
     ui/
       lcd/
+        dialogs.lua           -- BW dialogs (both tools)
         text_edit.lua         -- BW text editor (bind tool)
-        alert.lua             -- BW alert screen (both tools)
       lvgl/
-        dialogs.lua           -- color startup dialogs (both tools)
+        dialogs.lua           -- color dialogs (both tools, widgets)
     sensors.lua               -- telemetry sensor reader
     file_storage.lua          -- key=value file persistence
     shim.lua                  -- BW compatibility shim

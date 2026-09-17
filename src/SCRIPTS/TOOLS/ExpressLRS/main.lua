@@ -24,7 +24,8 @@ local crsf = loader("/SCRIPTS/ELRS/crsf.lua")
 local params = loader("/SCRIPTS/ELRS/crsf_params.lua", crsf)
 local CRSFSession = loader("/SCRIPTS/ELRS/crsf_session.lua", crsf, params)
 local Navigation = loader("/SCRIPTS/TOOLS/ExpressLRS/navigation.lua")
-local versionOk = loader("/SCRIPTS/ELRS/edgetx_version.lua")()
+local isVersionSupported, requiredVersions = loader("/SCRIPTS/ELRS/edgetx_version.lua")
+local versionOk = isVersionSupported()
 
 -- ============================================================================
 -- App Module: business logic between the session and the UI
@@ -138,6 +139,7 @@ local function init()
     crsf = crsf,
     VERSION = VERSION,
     versionOk = versionOk,
+    requiredVersions = requiredVersions,
   }
   if useLvgl then
     UI = loader("/SCRIPTS/TOOLS/ExpressLRS/ui/lvgl.lua", deps)
@@ -159,20 +161,12 @@ local function run(event, touchState)
     return 2
   end
 
-  -- UI-specific pre-checks (version check on both LVGL and BW paths)
+  -- UI-specific pre-checks (version and module gates on both LVGL and BW paths)
   if UI.preCheck then
     local result = UI.preCheck(event)
     if result ~= nil then
       return result
     end
-  end
-
-  if not App.checkCrsfModule() then
-    UI.handleNoModule()
-    if App.shouldExit then
-      return 2
-    end
-    return 0
   end
 
   session:drain()

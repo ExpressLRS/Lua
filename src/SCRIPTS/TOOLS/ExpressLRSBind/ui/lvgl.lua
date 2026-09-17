@@ -9,7 +9,7 @@ local App = deps.App
 local crsf = deps.crsf
 local msp = deps.msp
 
-local SharedDialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
+local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
 
 -- ============================================================================
 -- UI state
@@ -207,33 +207,25 @@ end
 function UI.init() end
 
 -- ============================================================================
--- Interface: preCheck (version gate)
+-- Interface: preCheck (version and module gates)
 -- ============================================================================
 
 function UI.preCheck(_event)
-  if not deps.versionOk then
-    if not UI.dialogBuilt then
-      SharedDialogs.showVersionRequired(exitTool)
-      UI.dialogBuilt = true
-    end
-    if App.shouldExit then
-      return 2
-    end
-    return 0
+  if deps.versionOk and App.checkCrsfModule() then
+    return nil
   end
-
-  return nil
-end
-
--- ============================================================================
--- Interface: handleNoModule
--- ============================================================================
-
-function UI.handleNoModule()
   if not UI.dialogBuilt then
-    SharedDialogs.showNoModule(exitTool)
+    if deps.versionOk then
+      Dialogs.showNoModule(exitTool)
+    else
+      Dialogs.showVersionRequired(deps.requiredVersions, exitTool)
+    end
     UI.dialogBuilt = true
   end
+  if App.shouldExit then
+    return 2
+  end
+  return 0
 end
 
 -- ============================================================================

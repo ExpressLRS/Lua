@@ -56,7 +56,7 @@ local function statusLabel()
     type = lvgl.LABEL,
     align = LEFT,
     font = BOLD,
-    color = COLOR_THEME_SECONDARY1,
+    color = VTXDisplay.statusColor,
     text = VTXDisplay.statusText,
     visible = VTXDisplay.showStatus,
   }
