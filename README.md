@@ -11,7 +11,7 @@ The package also includes two color-LCD widgets: the **ELRS Telemetry Widget** a
 
 ## Installation
 
-Copy the contents of the `src/` directory to the **root** of your radio's SD card, preserving the directory structure. Delete any old ELRS scripts (`ELRS.lua`, `elrsV2.lua`, `elrsV3.lua`, `expresslrs.lua` and their `.luac` counterparts) from `SCRIPTS/TOOLS/`.
+Copy the contents of the `src/` directory to the **root** of your radio's SD card, preserving the directory structure. Delete any old ELRS scripts (`elrs.lua`, `ELRS.lua`, `elrsV2.lua`, `elrsV3.lua`, `expresslrs.lua` and their `.luac` counterparts) from `SCRIPTS/TOOLS/`.
 
 When done, your SD card should contain:
 
@@ -133,3 +133,8 @@ See [docs/development.md](docs/development.md) for the tool's internal architect
 
 The bind phrase manager additionally requires **ExpressLRS 4.1+** on the device for its MSP
 configuration support; on older firmware it reports "No response (needs ELRS 4.1+)".
+
+## Legacy Script
+
+[`legacy/`](legacy/) holds `elrs.lua`, a single-file configuration tool meant for older radios that no longer support
+the minimum EdgeTX version listed in [Compatibility](#compatibility).
