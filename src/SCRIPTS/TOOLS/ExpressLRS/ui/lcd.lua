@@ -299,7 +299,7 @@ function UI.getBackExitLabel()
   if Navigation.isAtRoot() then
     return "-- EXIT (" .. VERSION .. ") --"
   else
-    return "----BACK----"
+    return "---- BACK ----"
   end
 end
 
