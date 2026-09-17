@@ -29,6 +29,8 @@ local ROW_CLEAR = 8
 local ROW_BACK = 9
 local HIST_BASE = 100
 
+local EXIT_LABEL = "[-- EXIT (" .. VERSION .. ") --]"
+
 local PAGE_MAIN = 1
 local PAGE_HISTORY = 2
 
@@ -257,7 +259,7 @@ end
 
 local function drawTitle()
   lcd.drawFilledRectangle(0, 0, LCD_W, UI.textSize + 1, GREY_DEFAULT)
-  lcd.drawText(UI.COL1 + 1, 1, "ELRS Bind " .. VERSION, INVERS)
+  lcd.drawText(UI.COL1 + 1, 1, "ExpressLRS Bind", INVERS)
   -- Link flag: C while RX telemetry is alive, - otherwise
   lcd.drawText(LCD_W - 1, 1, crsf.hasTelemetry and "C" or "-", INVERS + RIGHT)
 end
@@ -282,7 +284,7 @@ local function drawRow(id, yPos, isSelected)
   elseif id == ROW_HISTORY then
     lcd.drawText(UI.COL1, yPos, "> History", attr + BOLD)
   elseif id == ROW_EXIT then
-    lcd.drawText(10, yPos, "[---- EXIT ----]", attr + BOLD)
+    lcd.drawText(10, yPos, EXIT_LABEL, attr + BOLD)
   elseif id == ROW_CLEAR then
     lcd.drawText(10, yPos, "[Clear All]", attr + BOLD)
   elseif id == ROW_BACK then
