@@ -143,6 +143,7 @@ The simulator supports multiple test scenarios, configurable via the `config.sce
 | `model_mismatch` | TX + RX connected with Model ID mismatch flag. Triggers warning dialog. |
 | `armed` | TX + RX connected with "is Armed" warning flag. `ANT` is pinned to 0. |
 | `single_antenna` | TX + RX connected on a receiver with one RF path. `2RSS` is pinned to 0, so the telemetry widget reports no diversity. |
+| `flrc` | TX + RX connected at F1000. FLRC carries no SNR, so `RSNR` is a permanent 0 and the full-screen SNR row reads "n/a". |
 | `slow_loading` | Parameter reads delayed by ~2 seconds each. Tests loading UI states. |
 | `no_module` | No CRSF module found. Triggers "No Module Found" error dialog. |
 | `critical_error` | TX + RX connected with a critical baud-rate error flag. Triggers the warning screen; the suppress write clears it. |

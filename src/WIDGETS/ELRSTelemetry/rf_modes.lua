@@ -195,6 +195,18 @@ function RfModes.floor(rfmd)
   return dbm
 end
 
+-- The FLRC rates. The radio reports no SNR for FLRC packets, so RSNR sits at
+-- 0 for as long as one of these runs. Keyed by name: both majors spell them
+-- the same, and the name is what a reader can check against the RF Mode row.
+local NO_SNR = { D250 = true, D500 = true, F500 = true, F1000 = true }
+
+--- Whether an RFMD sensor value names a rate that carries an SNR reading.
+function RfModes.hasSnr(rfmd)
+  local names = RfModes._names
+  local name = names and names[rfmd + 1]
+  return not (name and NO_SNR[name])
+end
+
 -- ============================================================================
 -- Return module
 -- ============================================================================
