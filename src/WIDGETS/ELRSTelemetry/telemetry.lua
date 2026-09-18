@@ -188,6 +188,13 @@ function Telemetry.rfModeName()
   return RfModes.name(rfmd)
 end
 
+--- Whether the current rate carries an SNR reading at all. FLRC rates do
+--- not, so their RSNR is a placeholder 0 rather than a measurement.
+function Telemetry.hasSnr()
+  local rfmd = Telemetry.link.rfmd
+  return rfmd == nil or RfModes.hasSnr(rfmd)
+end
+
 -- ============================================================================
 -- Derived state
 -- ============================================================================
@@ -410,6 +417,7 @@ function Telemetry.update()
   link.rssi1 = crsf.getSensorValue("1RSS")
   link.rssi2 = crsf.getSensorValue("2RSS")
   link.rqly = crsf.getSensorValue("RQly")
+  link.rsnr = crsf.getSensorValue("RSNR")
   link.ant = crsf.getSensorValue("ANT")
   link.tqly = crsf.getSensorValue("TQly")
   link.trss = crsf.getSensorValue("TRSS")

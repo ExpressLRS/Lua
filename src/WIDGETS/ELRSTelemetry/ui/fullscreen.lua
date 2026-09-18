@@ -30,8 +30,8 @@ local FullScreenUI = {}
 local LABEL_PCT = (LCD_W < LCD_H) and 42 or 50
 
 --- Wrap a value formatter so a row reads "--" while the link is down.
---- Only the link and power rows take this. The flight controller and GPS rows
---- have their own fallbacks, and latitude/longitude deliberately keep showing
+--- The link, power, satellite, speed and altitude rows take this. The flight
+--- controller rows have their own fallbacks, and latitude/longitude keep showing
 --- the last known position after the link drops -- that is what you read when
 --- you are looking for a model that stopped answering.
 local function whenConnected(fn)
@@ -147,13 +147,19 @@ function FullScreenUI.build()
 
   createDisplayRow(fields, "Link Quality", Display.lqValueText)
 
+  -- Both antennas on one row in fixed 1 / 2 order, as the module's own screen
+  -- and the compact tiers print them, so neither number jumps when the
+  -- receiver switches paths. A single-path receiver gets the bare reading.
   createDisplayRow(
     fields,
-    "RSSI 1",
+    "RSSI",
     whenConnected(function()
       local rssi1 = Telemetry.link.rssi1
       if rssi1 == nil then
         return "--"
+      end
+      if Telemetry.hasDiversity() then
+        return table.concat({ tostring(rssi1), " / ", tostring(Telemetry.link.rssi2), " dBm" })
       end
       return table.concat({ tostring(rssi1), " dBm" })
     end)
@@ -161,20 +167,17 @@ function FullScreenUI.build()
 
   createDisplayRow(
     fields,
-    "RSSI 2",
+    "SNR",
     whenConnected(function()
-      local rssi2 = Telemetry.link.rssi2
-      if rssi2 == nil then
+      local rsnr = Telemetry.link.rsnr
+      if rsnr == nil then
         return "--"
       end
-      return table.concat({ tostring(rssi2), " dBm" })
-    end),
-    function()
-      if not Telemetry.hasDiversity() then
-        return COLOR_THEME_DISABLED
+      if not Telemetry.hasSnr() then
+        return "n/a" -- FLRC: the sensor is a permanent 0, not a reading
       end
-      return COLOR_THEME_SECONDARY1
-    end
+      return table.concat({ tostring(rsnr), " dB" })
+    end)
   )
 
   createDisplayRow(
@@ -186,7 +189,7 @@ function FullScreenUI.build()
       end
       -- EdgeTX's telemetry list prints the raw ANT enum (0/1) and so does the TX
       -- module's own screen. The "Ant " prefix keeps this row from reading as that
-      -- same number, and 1/2 matches the RSSI 1 / RSSI 2 rows above.
+      -- same number, and 1/2 matches the order of the RSSI pair above.
       if Telemetry.link.ant == 0 then
         return "Ant 1"
       end
@@ -264,29 +267,41 @@ function FullScreenUI.build()
   -- GPS section
   createSectionHeader(fields, "GPS")
 
-  createDisplayRow(fields, "Satellites", function()
-    local sats = Telemetry.link.sats
-    if sats == nil then
-      return "--"
-    end
-    return tostring(sats)
-  end)
+  createDisplayRow(
+    fields,
+    "Satellites",
+    whenConnected(function()
+      local sats = Telemetry.link.sats
+      if sats == nil then
+        return "--"
+      end
+      return tostring(sats)
+    end)
+  )
 
-  createDisplayRow(fields, "Speed", function()
-    local gspd = Telemetry.link.gspd
-    if gspd == nil then
-      return "--"
-    end
-    return string.format("%.1f", gspd)
-  end)
+  createDisplayRow(
+    fields,
+    "Speed",
+    whenConnected(function()
+      local gspd = Telemetry.link.gspd
+      if gspd == nil then
+        return "--"
+      end
+      return string.format("%.1f", gspd)
+    end)
+  )
 
-  createDisplayRow(fields, "Altitude", function()
-    local alt = Telemetry.link.alt
-    if alt == nil then
-      return "--"
-    end
-    return tostring(alt)
-  end)
+  createDisplayRow(
+    fields,
+    "Altitude",
+    whenConnected(function()
+      local alt = Telemetry.link.alt
+      if alt == nil then
+        return "--"
+      end
+      return tostring(alt)
+    end)
+  )
 
   createDisplayRow(fields, "Latitude", function()
     if Telemetry.gps == nil then

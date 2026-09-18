@@ -44,6 +44,9 @@ local shim = loadScript("/SCRIPTS/CRSFSimulator/shim.lua")()
 --                    Shows armed warning in subtitle.
 --   "single_antenna" RX with a single RF path: 2RSS pinned to 0, so the
 --                    widgets report no diversity.
+--   "flrc"           TX + RX connected at F1000. FLRC carries no SNR, so
+--                    RSNR is a permanent 0 and an SNR reading must say so
+--                    rather than print 0 dB.
 --   "unrated_rate"   TX + RX connected on a packet rate ExpressLRS publishes
 --                    no receiver sensitivity for. There is no floor to
 --                    measure RSSI against, so anything drawn against one has
@@ -1210,6 +1213,7 @@ local function getElrsFlags()
     or config.scenario == "single_antenna"
     or config.scenario == "weak_link"
     or config.scenario == "unrated_rate"
+    or config.scenario == "flrc"
   then
     flags = 0x01 -- connected
   else
@@ -1685,8 +1689,6 @@ local moduleFound = (config.scenario ~= "no_module")
 -- no_module scenario has no entry -> mockTelemetry returns nil.
 -- ============================================================================
 
-local txModuleTelemetry = { TPWR = 50 }
-
 -- TQly/TRSS are the downlink pair: the RX->TX telemetry path, reported by the
 -- handset's own receiver. They run a few dB behind the uplink in every
 -- scenario because the receiver transmits at a fraction of the module's power,
@@ -1698,6 +1700,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -87,
     ["2RSS"] = -93,
     RQly = 99,
+    RSNR = 8,
     ANT = 1,
     TQly = 100,
     TRSS = -95,
@@ -1717,6 +1720,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -84,
     ["2RSS"] = 0,
     RQly = 97,
+    RSNR = 8,
     ANT = 0,
     TQly = 100,
     TRSS = -91,
@@ -1734,6 +1738,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -78,
     ["2RSS"] = -82,
     RQly = 100,
+    RSNR = 8,
     ANT = 0,
     TQly = 100,
     TRSS = -83,
@@ -1745,6 +1750,26 @@ local scenarioTelemetry = {
     Alt = 85,
     GPS = { lat = 54.7050, lon = 25.3100 },
   },
+  -- TX + RX connected at F1000 (v3 index 13). FLRC carries no SNR, so the
+  -- receiver reports 0 for as long as the rate runs; pinned in sensorToggle.
+  flrc = {
+    TPWR = 250,
+    RFMD = 13,
+    ["1RSS"] = -70,
+    ["2RSS"] = -74,
+    RQly = 100,
+    RSNR = 0,
+    ANT = 0,
+    TQly = 100,
+    TRSS = -80,
+    RxBt = 16.4,
+    Curr = 18.0,
+    FM = "ACRO",
+    Sats = 10,
+    GSpd = 45.0,
+    Alt = 30,
+    GPS = { lat = 54.6872, lon = 25.2797 },
+  },
   -- A packet rate ExpressLRS publishes no sensitivity figure for (v3 index 18,
   -- "9K1000", carried in the tables as 0). There is no floor to measure
   -- against, so everything derived from one has to fall back rather than draw
@@ -1755,6 +1780,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -79,
     ["2RSS"] = -84,
     RQly = 98,
+    RSNR = 8,
     ANT = 0,
     TQly = 100,
     TRSS = -88,
@@ -1774,6 +1800,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -55,
     ["2RSS"] = -58,
     RQly = 95,
+    RSNR = 12,
     ANT = 1,
     TQly = 100,
     TRSS = -61,
@@ -1788,11 +1815,17 @@ local scenarioTelemetry = {
     ["1RSS"] = -55,
     ["2RSS"] = -58,
     RQly = 95,
+    RSNR = 12,
     ANT = 1,
     TQly = 100,
     TRSS = -61,
     RxBt = 15.8,
     Curr = 0.5,
+    FM = "ACRO",
+    Sats = 12,
+    GSpd = 25.3,
+    Alt = 142,
+    GPS = { lat = 54.6872, lon = 25.2797 },
   },
   -- Same signal as model_mismatch, and deliberately no sensorToggle entry: the
   -- mismatch bit is the only thing that may move, so RQly stays at 95 and the
@@ -1803,6 +1836,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -55,
     ["2RSS"] = -58,
     RQly = 95,
+    RSNR = 12,
     ANT = 1,
     TQly = 100,
     TRSS = -61,
@@ -1817,6 +1851,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -85,
     ["2RSS"] = -88,
     RQly = 60,
+    RSNR = 2,
     ANT = 0,
     TQly = 62,
     TRSS = -97,
@@ -1828,13 +1863,35 @@ local scenarioTelemetry = {
     Alt = 210,
     GPS = { lat = 54.6600, lon = 25.2400 },
   },
-  reconnect = {
-    -- Same as normal; only served when isRxAvailable() is true
+  no_telemetry = {
+    -- The sensor list a previous flight left on the model. The RX never
+    -- answers, so every value is served as 0 the way EdgeTX does; only the
+    -- key set matters.
     TPWR = 50,
     RFMD = 7,
     ["1RSS"] = -87,
     ["2RSS"] = -93,
     RQly = 99,
+    RSNR = 8,
+    ANT = 1,
+    TQly = 100,
+    TRSS = -95,
+    RxBt = 15.2,
+    Curr = 12.5,
+    FM = "ACRO",
+    Sats = 12,
+    GSpd = 25.3,
+    Alt = 142,
+    GPS = { lat = 54.6872, lon = 25.2797 },
+  },
+  reconnect = {
+    -- Same as normal; zeroed until isRxAvailable() turns true
+    TPWR = 50,
+    RFMD = 7,
+    ["1RSS"] = -87,
+    ["2RSS"] = -93,
+    RQly = 99,
+    RSNR = 8,
     ANT = 1,
     TQly = 100,
     TRSS = -95,
@@ -1848,6 +1905,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -87,
     ["2RSS"] = -93,
     RQly = 99,
+    RSNR = 8,
     ANT = 1,
     TQly = 100,
     TRSS = -95,
@@ -1866,6 +1924,7 @@ local scenarioTelemetry = {
     ["1RSS"] = -87,
     ["2RSS"] = -93,
     RQly = 99,
+    RSNR = 8,
     ANT = 1,
     TQly = 100,
     TRSS = -95,
@@ -1887,6 +1946,7 @@ local sensorJitter = {
   TRSS = 3,
   RQly = 2, -- +/- 2%
   TQly = 2,
+  RSNR = 2, -- +/- 2 dB
   RxBt = 0.05, -- +/- 0.05V
   Curr = 2.0, -- +/- 2A
   GSpd = 3.0,
@@ -1914,6 +1974,10 @@ local sensorToggle = {
     -- Must stay exactly 0: that is what marks the second RF path as absent.
     ["2RSS"] = { 0 },
   },
+  flrc = {
+    -- FLRC reports no SNR: exactly 0, never jittered.
+    RSNR = { 0 },
+  },
   mismatch_cycle = {
     -- ~10 s connected, ~5 s down, repeating. Exactly 95 or 0 so the
     -- RQly-derived connection state flips cleanly on each phase change.
@@ -1935,46 +1999,44 @@ local function updateTelemetryCache()
   end
   lastTelemetryUpdate = now
 
-  if not isRxAvailable() then
-    -- TX module still reports RFMD/TPWR via link stats even without RX.
-    -- Only provide these when a module is present (not no_module).
-    telemetryCache = {}
-    if moduleFound then
-      for k, v in pairs(txModuleTelemetry) do
-        telemetryCache[k] = v
-      end
-    end
-    return
-  end
   local t = scenarioTelemetry[config.scenario]
+  telemetryCache = {}
   if not t then
-    telemetryCache = {}
     return
   end
 
-  telemetryCache = {}
-  toggleStep = toggleStep + 1
-  local toggles = sensorToggle[config.scenario]
-  for sensorId, base in pairs(t) do
-    local seq = toggles and toggles[sensorId]
-    local jit = sensorJitter[sensorId]
-    if seq then
-      telemetryCache[sensorId] = seq[(toggleStep % #seq) + 1]
-    elseif jit then
-      local val = base + (math.random() * 2 - 1) * jit
-      if jit == math.floor(jit) then
-        val = math.floor(val + 0.5)
+  if isRxAvailable() then
+    toggleStep = toggleStep + 1
+    local toggles = sensorToggle[config.scenario]
+    for sensorId, base in pairs(t) do
+      local seq = toggles and toggles[sensorId]
+      local jit = sensorJitter[sensorId]
+      if seq then
+        telemetryCache[sensorId] = seq[(toggleStep % #seq) + 1]
+      elseif jit then
+        local val = base + (math.random() * 2 - 1) * jit
+        if jit == math.floor(jit) then
+          val = math.floor(val + 0.5)
+        end
+        -- A link quality is a percentage of packets received, so it cannot
+        -- exceed 100. Jittering a base of 99 was handing the widgets 101, which
+        -- is not a reading any receiver can produce.
+        local ceiling = sensorCeiling[sensorId]
+        if ceiling and val > ceiling then
+          val = ceiling
+        end
+        telemetryCache[sensorId] = val
+      else
+        telemetryCache[sensorId] = base
       end
-      -- A link quality is a percentage of packets received, so it cannot
-      -- exceed 100. Jittering a base of 99 was handing the widgets 101, which
-      -- is not a reading any receiver can produce.
-      local ceiling = sensorCeiling[sensorId]
-      if ceiling and val > ceiling then
-        val = ceiling
-      end
-      telemetryCache[sensorId] = val
-    else
-      telemetryCache[sensorId] = base
+    end
+  end
+
+  -- EdgeTX serves 0 for every sensor while RQly is 0 (luaGetValueAndPush),
+  -- the module's own TPWR/RFMD included: Lua never sees the link stats frame.
+  if (telemetryCache.RQly or 0) == 0 then
+    for sensorId in pairs(t) do
+      telemetryCache[sensorId] = 0
     end
   end
 end
@@ -1982,7 +2044,8 @@ end
 --- Return a mock telemetry sensor value for the current scenario.
 -- Called at ~10 Hz by the widget via crsf.getSensorValue(). Values are
 -- regenerated only once per second; intermediate calls return cached data.
--- Returns nil when disconnected or the sensor is not defined.
+-- Returns 0 for every sensor while the link is down, as EdgeTX does, and nil
+-- for a sensor the scenario does not define.
 local function mockGetSensorValue(sensorId)
   updateTelemetryCache()
   return telemetryCache[sensorId]
