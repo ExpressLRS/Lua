@@ -500,19 +500,34 @@ function Components.valueRow(dst, rect, y, m, spec)
   return y + m.sml
 end
 
---- The narrowest column that holds every cell of the grid: its widest caption
---- plus the gap plus its widest value, reserved rather than measured live so
---- the answer does not change with the readings.
-local function gridMinColW(m, rows)
-  local need = 0
+--- Per column, the widest caption and the widest reserved value. The caption
+--- width is where the column's values start, so PWR and BATT read down one
+--- edge; the value width is reserved rather than measured live so the answer
+--- does not change with the readings.
+local function gridColumns(rows)
+  local cols = {}
   for i = 1, #rows do
     for j = 1, #rows[i] do
       local cell = rows[i][j]
-      local cw = Components.textWidth(cell.caption, SMLSIZE) + m.pad + Components.textWidth(cell.reserve, SMLSIZE)
-      if cw > need then
-        need = cw
+      local col = cols[j]
+      if col == nil then
+        col = { caption = 0, value = 0 }
+        cols[j] = col
       end
+      col.caption = math.max(col.caption, Components.textWidth(cell.caption, SMLSIZE))
+      col.value = math.max(col.value, Components.textWidth(cell.reserve, SMLSIZE))
     end
+  end
+  return cols
+end
+
+--- The narrowest column that holds every cell of the grid: the widest caption
+--- plus the gap plus the widest value in any one column.
+local function gridMinColW(m, rows)
+  local need = 0
+  local cols = gridColumns(rows)
+  for j = 1, #cols do
+    need = math.max(need, cols[j].caption + m.pad + cols[j].value)
   end
   return need
 end
@@ -521,8 +536,9 @@ end
 --- The captions are the sensor names EdgeTX itself puts in the model's
 --- telemetry list, mixed case and all, so the grid reads straight across to
 --- that list and to the module's own screen.
---- Values sit a fixed gap after their caption, left-aligned, so a reading
---- gaining a digit grows into its own column's slack and nothing reflows.
+--- Values sit a fixed gap after the column's widest caption, left-aligned, so
+--- the column's readings share one edge and a reading gaining a digit grows
+--- into its own column's slack without reflowing anything.
 --- rows is a list of rows, each a list of { caption, text, reserve } cells --
 --- reserve being the widest string the value can render.
 --- A zone too narrow for two columns lays the same cells out one per line
@@ -540,6 +556,7 @@ function Components.grid(dst, rect, y, m, rows)
     rows = flat
     colW = rect.w
   end
+  local cols = gridColumns(rows)
   for i = 1, #rows do
     local row = rows[i]
     for j = 1, #row do
@@ -553,7 +570,7 @@ function Components.grid(dst, rect, y, m, rows)
         text = cell.caption,
       })
       Components.label(dst, {
-        x = cx + Components.textWidth(cell.caption, SMLSIZE) + m.pad,
+        x = cx + cols[j].caption + m.pad,
         y = y,
         font = SMLSIZE,
         color = COLOR_THEME_PRIMARY1,
