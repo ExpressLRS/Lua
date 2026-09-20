@@ -50,7 +50,7 @@ local function buildUi()
   lvgl.clear()
 
   local pg = lvgl.page({
-    title = "ExpressLRS Bind Phrase",
+    title = "ExpressLRS Bind Tool",
     subtitle = App.uidLine,
     back = exitTool,
   })
