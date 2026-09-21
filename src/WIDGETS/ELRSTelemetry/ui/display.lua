@@ -118,10 +118,10 @@ function Display.trssText()
   return table.concat({ tostring(trss), " dBm" })
 end
 
---- TX power on its own, e.g. "100 mW", or "--" while unknown.
+--- TX power on its own, e.g. "100 mW", or "--" while disconnected.
 function Display.powerText()
   local tpwr = Telemetry.link.tpwr
-  if tpwr == nil then
+  if not Telemetry.isConnected() or tpwr == nil then
     return "--"
   end
   return table.concat({ tostring(tpwr), " mW" })
