@@ -25,7 +25,8 @@ local msp = loader("/SCRIPTS/ELRS/msp.lua", crsf)
 local defer = loader("/SCRIPTS/ELRS/defer.lua")
 local FileStorage = loader("/SCRIPTS/ELRS/file_storage.lua")
 local History = loader("/SCRIPTS/TOOLS/ExpressLRSBind/history_storage.lua", FileStorage)
-local versionOk = loader("/SCRIPTS/ELRS/edgetx_version.lua")()
+local isVersionSupported, requiredVersions = loader("/SCRIPTS/ELRS/edgetx_version.lua")
+local versionOk = isVersionSupported()
 
 -- ============================================================================
 -- App Module: business logic shared by both UI frontends
@@ -281,6 +282,7 @@ local function init()
     msp = msp,
     VERSION = VERSION,
     versionOk = versionOk,
+    requiredVersions = requiredVersions,
   }
   App.phrase = History.items[1] or ""
   if useLvgl then
@@ -306,20 +308,12 @@ local function run(event, touchState)
     return 2
   end
 
-  -- UI-specific pre-checks (version gate on both LVGL and BW paths)
+  -- UI-specific pre-checks (version and module gates on both LVGL and BW paths)
   if UI.preCheck then
     local result = UI.preCheck(event)
     if result ~= nil then
       return result
     end
-  end
-
-  if not App.checkCrsfModule() then
-    UI.handleNoModule()
-    if App.shouldExit then
-      return 2
-    end
-    return 0
   end
 
   crsf.drain(App, App.onFrame)

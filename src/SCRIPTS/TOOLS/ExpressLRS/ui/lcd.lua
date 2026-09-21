@@ -11,7 +11,7 @@ local session = deps.session
 local crsf = deps.crsf
 local VERSION = deps.VERSION
 
-local drawAlert = loadScript("/SCRIPTS/ELRS/ui/lcd/alert.lua")()
+local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lcd/dialogs.lua")()
 
 -- ============================================================================
 -- UI state
@@ -69,21 +69,20 @@ function UI.init()
 end
 
 -- ============================================================================
--- Interface: preCheck (version gate)
+-- Interface: preCheck (version and module gates)
 -- ============================================================================
 
 function UI.preCheck(event)
   if not deps.versionOk then
-    drawAlert("Unsupported", {
-      "Requires EdgeTX:",
-      "- 2.11.6 or later",
-      "- 2.12.1 or later",
-      "- 3.0 or later",
-    })
+    Dialogs.drawVersionRequired(deps.requiredVersions)
     if event == EVT_VIRTUAL_EXIT then
       App.shouldExit = true
       return 2
     end
+    return 0
+  end
+  if not App.checkCrsfModule() then
+    Dialogs.drawNoModule()
     return 0
   end
   return nil
@@ -117,28 +116,14 @@ function UI.onNewDevice()
 end
 
 -- ============================================================================
--- Interface: handleNoModule
--- ============================================================================
-
-function UI.handleNoModule()
-  drawAlert(" No ExpressLRS", {
-    "Enable a CRSF Internal",
-    "  or External module in",
-    "      Model settings",
-    " If module is internal",
-    "also set Internal RF to",
-    "CRSF in SYS->Hardware",
-  })
-end
-
--- ============================================================================
 -- Interface: handleUnsupported
 -- ============================================================================
 
 function UI.handleUnsupported()
-  drawAlert("Unsupported Firmware", {
-    "ELRS 1.x firmware detected.",
-    "Please update to 3.x.",
+  Dialogs.draw("Unsupported", {
+    "ELRS 1.x firmware",
+    "detected. Update to",
+    "3.5.4 or later.",
   })
 end
 
@@ -167,7 +152,7 @@ function UI.render(event, _touchState)
     UI.warningDismissedAt = nil
   end
 
-  -- Model mismatch alert (full-screen, blocks normal rendering)
+  -- Model mismatch dialog (full-screen, blocks normal rendering)
   if session.status.modelMismatch and not UI.warningDismissedAt then
     if event == EVT_VIRTUAL_ENTER then
       UI.warningDismissedAt = getTime()
@@ -177,7 +162,7 @@ function UI.render(event, _touchState)
       App.shouldExit = true
       return
     end
-    drawAlert("Model Mismatch", {
+    Dialogs.draw("Model Mismatch", {
       "RX connected but",
       "Model ID doesn't match.",
       "Toggle Model Match",

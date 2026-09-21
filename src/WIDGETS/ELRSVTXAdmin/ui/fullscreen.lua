@@ -168,23 +168,18 @@ function FullScreenUI.build()
     end,
   })
 
-  -- No module — show checklist instead of controls (matches expresslrs.lua NoModuleDialog)
+  -- No module — show checklist instead of controls
   if not VTXAdmin.hasModule() then
+    local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
+    local heading = { type = lvgl.LABEL, text = "No module found. Check Model Setup:", color = COLOR_THEME_PRIMARY1 }
+    local rows = Dialogs.noModuleChecklist(COLOR_THEME_DISABLED)
+    table.insert(rows, 1, heading)
     pg:rectangle({
       w = lvgl.PERCENT_SIZE + 100,
       thickness = 0,
       flexFlow = lvgl.FLOW_COLUMN,
       flexPad = lvgl.PAD_MEDIUM,
-      children = {
-        { type = lvgl.LABEL, text = "No module found. Check Model Setup:", color = COLOR_THEME_PRIMARY1 },
-        { type = lvgl.LABEL, text = "- Internal/External module enabled", color = COLOR_THEME_DISABLED },
-        { type = lvgl.LABEL, text = "- Protocol set to CRSF", color = COLOR_THEME_DISABLED },
-        {
-          type = lvgl.LABEL,
-          text = "- Baud rate: 400k (250Hz), 921k (500Hz), 1.87M (F1000)",
-          color = COLOR_THEME_DISABLED,
-        },
-      },
+      children = rows,
     })
     return
   end
