@@ -36,6 +36,36 @@ local function isRxSelectedDisconnected()
   return App.target == App.TARGET_RX and not crsf.hasTelemetry
 end
 
+-- Narrow screens put the controls under their title
+local NARROW = LCD_W < 400
+
+local function settingRow(parent, title, children)
+  if NARROW then
+    parent:label({ text = title })
+    parent:box({
+      w = lvgl.PERCENT_SIZE + 100,
+      flexFlow = lvgl.FLOW_ROW,
+      flexPad = lvgl.PAD_MEDIUM,
+      align = LEFT,
+      children = children,
+    })
+    return
+  end
+  parent:setting({
+    w = lvgl.PERCENT_SIZE + 100,
+    title = title,
+    children = {
+      {
+        type = lvgl.BOX,
+        x = 120 * lvgl.LCD_SCALE,
+        flexFlow = lvgl.FLOW_ROW,
+        flexPad = lvgl.PAD_MEDIUM,
+        children = children,
+      },
+    },
+  })
+end
+
 local function buildUi()
   lvgl.clear()
 
@@ -45,93 +75,69 @@ local function buildUi()
     back = exitTool,
   })
 
-  local tbox = pg:box({
+  local col = pg:box({
     w = lvgl.PERCENT_SIZE + 100,
     flexFlow = lvgl.FLOW_COLUMN,
   })
 
-  tbox:setting({
-    w = lvgl.PERCENT_SIZE + 100,
-    title = "Bind phrase",
-    children = {
-      {
-        type = lvgl.BOX,
-        x = 120 * lvgl.LCD_SCALE,
-        flexFlow = lvgl.FLOW_ROW,
-        flexPad = lvgl.PAD_MEDIUM,
-        children = {
-          {
-            type = lvgl.TEXT_EDIT,
-            w = 250 * lvgl.LCD_SCALE,
-            value = App.phrase,
-            -- Must fit one un-chunked MSP_WRITE frame
-            length = msp.CONST.PHRASE_MAX,
-            set = function(v)
-              App.phrase = v
-            end,
-            active = App.isTargetReachableOrBoth,
-          },
-          {
-            type = lvgl.BUTTON,
-            text = "Set",
-            press = App.sendSet,
-            active = isSetEnabled,
-          },
-        },
-      },
+  settingRow(col, "Bind phrase", {
+    {
+      type = lvgl.TEXT_EDIT,
+      w = NARROW and lvgl.PERCENT_SIZE + 80 or 250 * lvgl.LCD_SCALE,
+      value = App.phrase,
+      -- Must fit one un-chunked MSP_WRITE frame
+      length = msp.CONST.PHRASE_MAX,
+      set = function(v)
+        App.phrase = v
+      end,
+      active = App.isTargetReachableOrBoth,
+    },
+    {
+      type = lvgl.BUTTON,
+      text = "Set",
+      press = App.sendSet,
+      active = isSetEnabled,
     },
   })
 
-  tbox:setting({
-    w = lvgl.PERCENT_SIZE + 100,
-    title = "Target",
-    children = {
-      {
-        type = lvgl.BOX,
-        x = 120 * lvgl.LCD_SCALE,
-        flexFlow = lvgl.FLOW_ROW,
-        flexPad = lvgl.PAD_MEDIUM,
-        children = {
-          {
-            type = lvgl.CHOICE,
-            title = "Select Target",
-            values = { "Transmitter", "Receiver", "Both" },
-            get = function()
-              return App.target
-            end,
-            set = function(n)
-              App.target = n
-            end,
-          },
-          {
-            type = lvgl.BUTTON,
-            text = "Request UID",
-            press = App.startUidRequest,
-            active = App.isTargetReachable,
-          },
-          {
-            type = lvgl.BUTTON,
-            text = "Unbind",
-            press = App.sendUnbind,
-            visible = isRxSelected,
-            active = isRxSelectedConnected,
-          },
-        },
-      },
+  settingRow(col, "Target", {
+    {
+      type = lvgl.CHOICE,
+      title = "Select Target",
+      values = { "Transmitter", "Receiver", "Both" },
+      get = function()
+        return App.target
+      end,
+      set = function(n)
+        App.target = n
+      end,
+    },
+    {
+      type = lvgl.BUTTON,
+      text = "Request UID",
+      press = App.startUidRequest,
+      active = App.isTargetReachable,
+    },
+    {
+      type = lvgl.BUTTON,
+      text = "Unbind",
+      press = App.sendUnbind,
+      visible = isRxSelected,
+      active = isRxSelectedConnected,
     },
   })
 
-  pg:box({
+  -- Shares its slot with the history, never both visible
+  col:box({
     w = lvgl.PERCENT_SIZE + 100,
-    y = 2 * lvgl.UI_ELEMENT_HEIGHT + 4 * lvgl.PAD_MEDIUM,
-    flexFlow = lvgl.FLOW_ROW,
+    flexFlow = NARROW and lvgl.FLOW_COLUMN or lvgl.FLOW_ROW,
     flexPad = lvgl.PAD_MEDIUM,
     align = LEFT,
     visible = isRxSelectedDisconnected,
     children = {
       {
         type = lvgl.LABEL,
-        w = 4 + lvgl.LCD_SCALE * (120 + 250),
+        w = NARROW and lvgl.PERCENT_SIZE + 100 or 4 + lvgl.LCD_SCALE * (120 + 250),
         text = " No receiver connected.\n Use Bind to set bindphrase if RX in bind mode",
       },
       {
@@ -142,9 +148,8 @@ local function buildUi()
     },
   })
 
-  local histSection = pg:box({
+  local histSection = col:box({
     w = lvgl.PERCENT_SIZE + 100,
-    y = 2 * lvgl.UI_ELEMENT_HEIGHT + 4 * lvgl.PAD_MEDIUM,
     flexFlow = lvgl.FLOW_COLUMN,
     flexPad = 0,
     visible = function()
