@@ -89,7 +89,7 @@ The tools build on the shared `SCRIPTS/ELRS/` library, which the widgets use too
 |--------|---------|
 | `SCRIPTS/ELRS/crsf.lua` | CRSF constants, telemetry transport (`pop`/`drain`/`push`), module detection, derived link state (`hasTelemetry`, refreshed as a drain empties the queue), stateless frame decoders (`decodeDeviceInfo`, `decodeElrsStatus`, `isElrsV1Frame`) |
 | `SCRIPTS/ELRS/crsf_params.lua` | Opt-in parameter codec: `PARAMETER_SETTINGS_ENTRY` chunk reassembly over a caller-owned rx table and per-type decode, plus encoders that return `PARAMETER_READ`/`WRITE`, command-step and suppress-critical-errors frames for the caller to push. Loaded by the tool and the VTX Admin widget |
-| `SCRIPTS/ELRS/crsf_session.lua` | Opt-in stateful parameter client (`CRSFSession.new`, multi-instance): field store, load queue and retry scheduler, paced write queue, command state machine (one step in flight, retried when the radio's single output slot refuses it), and optional device discovery, link status and ELRS 1.x detection. Loaded by the tool and the VTX Admin widget |
+| `SCRIPTS/ELRS/crsf_session.lua` | Opt-in stateful parameter client (`CRSFSession.new`, multi-instance): field store, load queue and retry scheduler, paced write queue, command state machine (one step in flight, retried when the radio's single output slot refuses it), and optional device discovery, link status and unsupported-firmware detection (ELRS 1.x, or a TX below 3.5.4). Loaded by the tool and the VTX Admin widget |
 | `SCRIPTS/ELRS/msp.lua` | Opt-in MSP-over-CRSF codec: stateless encoders returning `(frameType, payload)` for `MSP_REQ`/`MSP_WRITE` and decoders for single-frame v1 `MSP_RESP`, plus the ELRS `RXTX_CONFIG` UID/phrase helpers. Loaded only by the bind tool |
 | `SCRIPTS/ELRS/defer.lua` | Single-slot `setTimeout`/`poll` timer; scheduling replaces the pending callback, which is what cancels a stale retry when a new action starts. Loaded only by the bind tool |
 | `SCRIPTS/ELRS/ui/lcd/text_edit.lua` | BW text editor replicating the firmware's `editName()` model-name semantics (rotary cycles the char, ENTER advances, long ENTER toggles case or commits on a space). Loaded only by the bind tool's BW UI. `ui/<display>/` is the library's home for shared UI components, mirroring the tools' own `ui/` split |
@@ -147,6 +147,7 @@ The simulator supports multiple test scenarios, configurable via the `config.sce
 | `slow_loading` | Parameter reads delayed by ~2 seconds each. Tests loading UI states. |
 | `no_module` | No CRSF module found. Triggers "No Module Found" error dialog. |
 | `critical_error` | TX + RX connected with a critical baud-rate error flag. Triggers the warning screen; the suppress write clears it. |
+| `old_firmware` | TX reports ExpressLRS 3.4.2, below the 3.5.4 minimum. Triggers the unsupported-firmware alert instead of the parameter list. |
 
 ### MSP bind traffic
 

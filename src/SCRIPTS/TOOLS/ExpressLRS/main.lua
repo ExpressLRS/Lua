@@ -88,7 +88,7 @@ end
 session = CRSFSession.new({
   discovery = true,
   trackStatus = true,
-  detectV1 = true,
+  detectUnsupported = true,
   preload = true,
   onDeviceUpdate = function(device, isNew)
     if device.id == session.deviceId and App.loadDevice(device) then
@@ -135,12 +135,11 @@ local function run(event, touchState)
   end
 
   session:drain()
-  session:tick()
-
-  if session.v1Detected then
+  if session.unsupported then
     UI.handleUnsupported()
     return 0
   end
+  session:tick()
 
   local currentFolder = Navigation.getCurrent()
   local folderReady = session:isFolderLoaded(currentFolder)
