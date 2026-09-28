@@ -137,6 +137,8 @@ function UI.render(event, _touchState)
 
   if session.command ~= nil then
     UI.drawPopup(event)
+  elseif session.commandResult then
+    UI.drawResultPopup(event)
   elseif event ~= 0 or UI.forceRedraw or UI.edit then
     UI.drawPage(event)
     UI.forceRedraw = false
@@ -462,6 +464,13 @@ end
 local SENDING_FRAMES = { "Sending... [|]", "Sending... [/]", "Sending... [-]", "Sending... [\\]" }
 -- 200 ms: a healthy link answers first, so nothing flashes
 local PENDING_POPUP_DELAY = 20
+
+function UI.drawResultPopup(event)
+  if popupConfirmation(session.commandResult.info, "Press [OK] to close", event) then
+    session.commandResult = nil
+    UI.invalidate()
+  end
+end
 
 function UI.drawPopup(event)
   local command = session.command

@@ -20,6 +20,38 @@ function Dialogs.showMessage(options)
   })
 end
 
+-- lvgl.message with a Close button
+function Dialogs.showInfo(options)
+  local dg = lvgl.dialog({
+    title = options.title,
+    h = 3 * lvgl.UI_ELEMENT_HEIGHT + 2 * lvgl.PAD_MEDIUM, -- default is 80% of the screen
+    flexFlow = lvgl.FLOW_COLUMN,
+    flexPad = lvgl.PAD_SMALL,
+  })
+
+  dg:build({
+    { type = lvgl.LABEL, w = lvgl.PERCENT_SIZE + 100, align = CENTER, text = options.message },
+    {
+      type = lvgl.BOX,
+      w = lvgl.PERCENT_SIZE + 100,
+      align = CENTER,
+      flexFlow = lvgl.FLOW_ROW,
+      children = {
+        {
+          type = lvgl.BUTTON,
+          w = lvgl.PERCENT_SIZE + 98,
+          text = "Close",
+          press = function()
+            dg:close()
+          end,
+        },
+      },
+    },
+  })
+
+  return dg
+end
+
 -- lines: label descriptors { text, font }, used as children
 local function buildExitDialog(title, lines, onExit)
   lvgl.clear()

@@ -435,6 +435,13 @@ function UI.render(_event, _touchState)
     if not UI.uiBuilt and session.fieldsCount > 0 then
       UI.build()
     end
+
+    -- After the rebuild, whose lvgl.clear() would drop it
+    local result = session.commandResult
+    if result then
+      session.commandResult = nil
+      Dialogs.showInfo({ title = result.name, message = result.info })
+    end
   end
 end
 
