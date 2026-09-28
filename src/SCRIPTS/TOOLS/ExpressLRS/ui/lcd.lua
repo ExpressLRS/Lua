@@ -1,6 +1,5 @@
 ---- #########################################################################
 ---- # BW LCD UI: Rendering, input handling, cursor management            #
----- # For black & white radios (no LVGL required)                        #
 ---- #########################################################################
 
 local deps = ...
@@ -13,51 +12,35 @@ local VERSION = deps.VERSION
 
 local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lcd/dialogs.lua")()
 
--- ============================================================================
--- UI state
--- ============================================================================
-
--- Title warning flash half-period, in 10 ms ticks. Also paces the idle page
--- repaint (the flash tick sets forceRedraw), so halving it doubles that rate.
+-- 10 ms ticks; also paces the idle repaint
 local WARN_FLASH_PERIOD = 100
 
 local UI = {
-  -- Cursor/selection state (owned entirely by this module)
   lineIndex = 1,
   pageOffset = 0,
   edit = nil,
 
-  -- Visible field list (rebuilt on invalidate)
   visibleFields = nil,
 
-  -- Layout constants for 128x64; UI.init widens COL2 at 212px wide and
-  -- raises maxLineIndex at 96px tall
+  -- 128x64; UI.init adjusts for 212 wide / 96 tall
   COL1 = 0,
   COL2 = 70,
   maxLineIndex = 6,
   textSize = 8,
   textYoffset = 3,
 
-  -- Redraw state
   forceRedraw = true,
   folderWasReady = false,
   wasLoading = false,
 
-  -- Warning flashing
   titleShowWarn = nil,
   titleShowWarnTimeout = 0,
-  titleWarnFlags = nil, -- last flags byte the flash phase was anchored to
+  titleWarnFlags = nil,
 
-  -- Warning dismissal (model mismatch)
   warningDismissedAt = nil,
 
-  -- Command popup spinner
   commandRunningIndicator = 1,
 }
-
--- ============================================================================
--- Interface: init
--- ============================================================================
 
 function UI.init()
   if LCD_W == 212 then
@@ -67,10 +50,6 @@ function UI.init()
     UI.maxLineIndex = 9
   end
 end
-
--- ============================================================================
--- Interface: preCheck (version and module gates)
--- ============================================================================
 
 function UI.preCheck(event)
   if not deps.versionOk then
@@ -88,18 +67,11 @@ function UI.preCheck(event)
   return nil
 end
 
--- ============================================================================
--- Interface: invalidate (does NOT reset cursor)
--- ============================================================================
-
+-- Keeps the cursor; onDeviceLoaded() resets it
 function UI.invalidate()
   UI.forceRedraw = true
   UI.visibleFields = nil
 end
-
--- ============================================================================
--- Interface: onDeviceLoaded (resets cursor + invalidates)
--- ============================================================================
 
 function UI.onDeviceLoaded()
   UI.lineIndex = 1
@@ -107,17 +79,9 @@ function UI.onDeviceLoaded()
   UI.invalidate()
 end
 
--- ============================================================================
--- Interface: onNewDevice
--- ============================================================================
-
 function UI.onNewDevice()
   UI.invalidate()
 end
-
--- ============================================================================
--- Interface: handleUnsupported
--- ============================================================================
 
 function UI.handleUnsupported()
   Dialogs.draw("Unsupported", {
@@ -127,13 +91,8 @@ function UI.handleUnsupported()
   })
 end
 
--- ============================================================================
--- Interface: render
--- ============================================================================
-
 function UI.render(event, _touchState)
-  -- Warning flash: any flags change re-anchors the phase, so a new warning
-  -- starts on its visible half and a cleared one disappears at once
+  -- Flags change restarts the flash on its visible half
   local time = getTime()
   local flags = session.status.flags
   if flags ~= UI.titleWarnFlags then
@@ -147,12 +106,10 @@ function UI.render(event, _touchState)
     UI.forceRedraw = true
   end
 
-  -- Warning dismissal cooldown (60s before re-showing)
-  if UI.warningDismissedAt and time - UI.warningDismissedAt > 6000 then
+  if UI.warningDismissedAt and time - UI.warningDismissedAt > 6000 then -- re-show 60 s after dismiss
     UI.warningDismissedAt = nil
   end
 
-  -- Model mismatch dialog (full-screen, blocks normal rendering)
   if session.status.modelMismatch and not UI.warningDismissedAt then
     if event == EVT_VIRTUAL_ENTER then
       UI.warningDismissedAt = getTime()
@@ -171,17 +128,13 @@ function UI.render(event, _touchState)
     return
   end
 
-  -- Force redraw while the queue is loading, to show the progress bar, and once
-  -- more on the frame it empties. poll() pops the last entry before we get here,
-  -- so without the trailing edge the response that completes a reload never
-  -- reaches the screen and the page waits for the next event or warn tick.
+  -- Redraw once more after the queue empties, or the last response never shows
   local loading = session:isLoading()
   if loading or UI.wasLoading then
     UI.forceRedraw = true
   end
   UI.wasLoading = loading
 
-  -- Render: command popup or normal page
   if session.command ~= nil then
     UI.drawPopup(event)
   elseif event ~= 0 or UI.forceRedraw or UI.edit then
@@ -189,10 +142,6 @@ function UI.render(event, _touchState)
     UI.forceRedraw = false
   end
 end
-
--- ============================================================================
--- User action handlers (call App for business logic, manage own state)
--- ============================================================================
 
 function UI.openFolder(folderId, folderName)
   App.enterFolder(folderId, folderName, { li = UI.lineIndex, po = UI.pageOffset })
@@ -227,10 +176,6 @@ function UI.handleBack()
   end
   UI.invalidate()
 end
-
--- ============================================================================
--- Build visible field list for current navigation state
--- ============================================================================
 
 function UI.buildVisibleFields()
   local currentFolder = Navigation.getCurrent()
@@ -288,10 +233,6 @@ function UI.getBackExitLabel()
   end
 end
 
--- ============================================================================
--- Field value increment
--- ============================================================================
-
 function UI.incrField(step)
   local field = UI.getField(UI.lineIndex)
   if not field then
@@ -323,10 +264,6 @@ function UI.incrField(step)
   until newval == min or newval == max
 end
 
--- ============================================================================
--- Field selection navigation
--- ============================================================================
-
 function UI.selectField(step)
   local count = UI.getSelectableCount()
   local fieldCount = UI.getFieldCount()
@@ -354,10 +291,6 @@ function UI.selectField(step)
     UI.pageOffset = UI.lineIndex - 1
   end
 end
-
--- ============================================================================
--- BW field display functions
--- ============================================================================
 
 local function fieldIntDisplay(field, y, attr)
   lcd.drawText(UI.COL2, y, field.value .. (field.unit or ""), attr)
@@ -397,10 +330,6 @@ displayHandlers[crsf.CONST.FIELD_COMMAND] = fieldCommandDisplay
 displayHandlers[App.DEVICE] = fieldCommandDisplay
 displayHandlers[App.DEVICE_FOLDER] = fieldFolderDisplay
 
--- ============================================================================
--- Title bar drawing
--- ============================================================================
-
 function UI.drawTitle()
   local barHeight = 9
   local goodBadPkt = ""
@@ -429,19 +358,11 @@ function UI.drawTitle()
   end
 end
 
--- ============================================================================
--- Warning display
--- ============================================================================
-
 function UI.drawWarning()
   lcd.drawText(UI.COL1, UI.textSize * 2, "Error:")
   lcd.drawText(UI.COL1, UI.textSize * 3, session.status.warning)
   lcd.drawText(LCD_W / 2, UI.textSize * 5, "[OK]", BLINK + INVERS + CENTER)
 end
-
--- ============================================================================
--- Event handling
--- ============================================================================
 
 function UI.handleEvent(event)
   if event == EVT_VIRTUAL_EXIT then
@@ -499,10 +420,6 @@ function UI.handleEvent(event)
   end
 end
 
--- ============================================================================
--- Main page rendering
--- ============================================================================
-
 function UI.drawPage(event)
   UI.handleEvent(event)
 
@@ -541,15 +458,9 @@ function UI.drawPage(event)
   end
 end
 
--- ============================================================================
--- Command popup rendering
--- ============================================================================
-
--- "Sending..." popup titles, one per spinner phase, precomputed: BW radios
--- have no table.concat and the popup is redrawn every cycle.
+-- Precomputed: no table.concat on BW radios
 local SENDING_FRAMES = { "Sending... [|]", "Sending... [/]", "Sending... [-]", "Sending... [\\]" }
--- Grace after a click before the "Sending..." popup appears (ticks): a
--- healthy link answers within it and goes straight to the confirm popup.
+-- 200 ms: a healthy link answers first, so nothing flashes
 local PENDING_POPUP_DELAY = 20
 
 function UI.drawPopup(event)
@@ -560,9 +471,8 @@ function UI.drawPopup(event)
     if result == "OK" then
       session:confirmCommand()
     elseif result == "CANCEL" then
-      -- Nothing else forces the next frame once the popup is dropped
       session:cancelCommand()
-      UI.invalidate()
+      UI.invalidate() -- nothing else repaints once the popup drops
     end
   elseif status == crsf.CONST.CMD_EXECUTING then
     if not session:isReceivingChunks() then
@@ -578,11 +488,7 @@ function UI.drawPopup(event)
       UI.invalidate()
     end
   else
-    -- CMD_CLICK or CMD_CONFIRMED: the step is out and the device has not
-    -- answered yet. No dialog owns the keys, so EXIT requests the cancel
-    -- while the popup keeps tracking the device until it reports CMD_IDLE.
-    -- Past the grace, show that something is happening; the result is not
-    -- needed (EXIT is handled here, ENTER means nothing).
+    -- Awaiting reply; EXIT cancels, popup tracks until CMD_IDLE
     if event == EVT_VIRTUAL_EXIT then
       session:requestCancelCommand()
     end

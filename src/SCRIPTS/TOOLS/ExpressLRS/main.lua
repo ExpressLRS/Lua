@@ -11,12 +11,6 @@
 local VERSION = "r3"
 local useLvgl = (lvgl ~= nil)
 
--- ============================================================================
--- Load shared modules
--- ============================================================================
-
--- The loader is the one shared part that must bootstrap with a bare
--- loadScript; it owns the GC-before-load discipline.
 ---@diagnostic disable-next-line: need-check-nil
 local loader = loadScript("/SCRIPTS/ELRS/loader.lua")()
 
@@ -27,16 +21,8 @@ local Navigation = loader("/SCRIPTS/TOOLS/ExpressLRS/navigation.lua")
 local isVersionSupported, requiredVersions = loader("/SCRIPTS/ELRS/edgetx_version.lua")
 local versionOk = isVersionSupported()
 
--- ============================================================================
--- App Module: business logic between the session and the UI
--- ============================================================================
-
 local App = {
-  -- Tool-internal pseudo field types for the synthetic device rows in the
-  -- "Other Devices" list. Values sit above the wire range: the type byte is
-  -- masked with 0x7f at parse, so a real field type can never exceed 127 --
-  -- unlike 15/16, which the previous numbering used and which shadow
-  -- CRSF_VTX (0x0F) on the wire.
+  -- Synthetic row types; above 0x7f so no wire field type collides
   DEVICE = 128,
   DEVICE_FOLDER = 129,
 
@@ -57,7 +43,6 @@ function App.checkCrsfModule()
   return App.crsfModuleFound
 end
 
--- Returns true if device was set, false if no change needed.
 function App.loadDevice(device)
   if session:setDevice(device) then
     Navigation.reset()
@@ -66,7 +51,6 @@ function App.loadDevice(device)
   return false
 end
 
--- Returns true if device was switched.
 function App.switchDevice(deviceId, viewState)
   local device = session:getDevice(deviceId)
   if not device then
@@ -80,19 +64,15 @@ function App.switchDevice(deviceId, viewState)
   return false
 end
 
--- Navigate into folder.
 function App.enterFolder(folderId, folderName, viewState)
   Navigation.openFolder(folderId, folderName, viewState)
   session:loadFolder(folderId)
 end
 
--- Returns navigation entry (or nil).
 function App.goBack()
   return Navigation.goBack()
 end
 
--- Reload at root: switch back to TX device or reload fields, then
--- re-discover so new devices appear.
 function App.reloadAtRoot()
   if session.deviceId ~= crsf.CONST.ADDRESS_TX then
     local txDevice = session:getDevice(crsf.CONST.ADDRESS_TX)
@@ -104,10 +84,6 @@ function App.reloadAtRoot()
   end
   session:discoverDevices()
 end
-
--- ============================================================================
--- Session: the tool talks to one device at a time, tracking it fully
--- ============================================================================
 
 session = CRSFSession.new({
   discovery = true,
@@ -124,11 +100,6 @@ session = CRSFSession.new({
   end,
 })
 
--- ============================================================================
--- UI loading (deferred to init)
--- ============================================================================
-
--- Module table, forward-declared so init() can drop itself once it has run.
 local M = {}
 
 local function init()
@@ -147,21 +118,15 @@ local function init()
     UI = loader("/SCRIPTS/TOOLS/ExpressLRS/ui/lcd.lua", deps)
   end
   UI.init()
-  -- The returned table stays on the standalone Lua stack and pins init(),
-  -- which holds VERSION and useLvgl as upvalues. Drop it.
+  -- Returned table stays on the Lua stack; don't pin init's upvalues
   M.init = nil
 end
-
--- ============================================================================
--- Run (shared orchestrator)
--- ============================================================================
 
 local function run(event, touchState)
   if event == nil then
     return 2
   end
 
-  -- UI-specific pre-checks (version and module gates on both LVGL and BW paths)
   if UI.preCheck then
     local result = UI.preCheck(event)
     if result ~= nil then
@@ -197,10 +162,6 @@ local function run(event, touchState)
   end
   return 0
 end
-
--- ============================================================================
--- Return
--- ============================================================================
 
 M.init = init
 M.run = run

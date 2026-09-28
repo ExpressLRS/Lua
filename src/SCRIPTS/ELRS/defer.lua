@@ -1,26 +1,14 @@
 ---------------------------------------------------------------------------
 -- Deferred Callback Timer                                               --
--- Loaded via loadScript() with no arguments; returns the Defer table.   --
---                                                                       --
--- A single-slot setTimeout: at most one callback is pending at a time,  --
--- and scheduling a new one replaces it. That replacement is the point,  --
--- not a limitation -- a consumer sequencing wire traffic (send, retry,  --
--- follow-up) wants a new action to cancel whatever was pending. A       --
--- consumer needing independent timers needs a different tool.           --
---                                                                       --
--- Each loadScript() execution returns a fresh table, so every consumer  --
--- owns a private slot. poll() must be called once per run() tick.       --
+-- One pending callback; a new one replaces it. poll() once per run().   --
+-- Each loadScript() gives a private slot.                               --
 ---------------------------------------------------------------------------
 
 local Defer = {
   _cb = nil,
 }
 
---- Schedule fn(ctx) to run once no sooner than ticks from now, replacing
--- any pending callback.
--- @param ticks  delay in getTime() units (10 ms)
--- @param fn     callback
--- @param ctx   passed to fn; nil is fine
+--- Calls fn(ctx) after ticks (10 ms units).
 function Defer.setTimeout(ticks, fn, ctx)
   Defer._cb = {
     start = getTime(),
@@ -30,13 +18,10 @@ function Defer.setTimeout(ticks, fn, ctx)
   }
 end
 
---- Drop the pending callback, if any.
 function Defer.clear()
   Defer._cb = nil
 end
 
---- Run the pending callback when its delay has elapsed. The slot is
--- cleared before the call so the callback may schedule a successor.
 function Defer.poll()
   local cb = Defer._cb
   if cb == nil then
@@ -45,7 +30,7 @@ function Defer.poll()
   if getTime() - cb.start < cb.ticks then
     return
   end
-  Defer._cb = nil
+  Defer._cb = nil -- cb may schedule a successor
   cb.fn(cb.ctx)
 end
 

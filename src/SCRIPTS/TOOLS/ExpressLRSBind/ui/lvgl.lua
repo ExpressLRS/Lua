@@ -1,6 +1,5 @@
 ---- #########################################################################
----- # LVGL UI: Color LCD rendering for the bind phrase manager             #
----- # For color LCD radios with EdgeTX 2.11.6+/2.12.1+ LVGL support        #
+---- # Bind tool UI for colour LVGL radios                                   #
 ---- #########################################################################
 
 local deps = ...
@@ -11,20 +10,11 @@ local msp = deps.msp
 
 local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
 
--- ============================================================================
--- UI state
--- ============================================================================
-
 local UI = {
-  -- App.rev the current page was built for; nil forces the first build.
+  -- App.rev the page was built for
   builtRev = nil,
-  -- Guards the one-shot version/no-module dialogs.
   dialogBuilt = false,
 }
-
--- ============================================================================
--- Main page
--- ============================================================================
 
 local function exitTool()
   App.shouldExit = true
@@ -60,7 +50,6 @@ local function buildUi()
     flexFlow = lvgl.FLOW_COLUMN,
   })
 
-  -- ***** Bind Phrase label + text edit + Set button *****
   tbox:setting({
     w = lvgl.PERCENT_SIZE + 100,
     title = "Bind phrase",
@@ -75,7 +64,7 @@ local function buildUi()
             type = lvgl.TEXT_EDIT,
             w = 250 * lvgl.LCD_SCALE,
             value = App.phrase,
-            -- A phrase must fit one un-chunked MSP_WRITE frame
+            -- Must fit one un-chunked MSP_WRITE frame
             length = msp.CONST.PHRASE_MAX,
             set = function(v)
               App.phrase = v
@@ -93,7 +82,6 @@ local function buildUi()
     },
   })
 
-  -- ***** Target label + dropdown + Request UID button *****
   tbox:setting({
     w = lvgl.PERCENT_SIZE + 100,
     title = "Target",
@@ -133,7 +121,6 @@ local function buildUi()
     },
   })
 
-  -- ***** Show Bind button if RX target selected and no RX connected *****
   pg:box({
     w = lvgl.PERCENT_SIZE + 100,
     y = 2 * lvgl.UI_ELEMENT_HEIGHT + 4 * lvgl.PAD_MEDIUM,
@@ -155,7 +142,6 @@ local function buildUi()
     },
   })
 
-  -- ***** Bind Phrase History *****
   local histSection = pg:box({
     w = lvgl.PERCENT_SIZE + 100,
     y = 2 * lvgl.UI_ELEMENT_HEIGHT + 4 * lvgl.PAD_MEDIUM,
@@ -179,7 +165,6 @@ local function buildUi()
         return App.history.items[i] ~= nil
       end,
     })
-    -- Button containing a history item with its value
     row:button({
       w = lvgl.PERCENT_SIZE + 80,
       text = function()
@@ -189,7 +174,6 @@ local function buildUi()
         App.useHistory(i)
       end,
     })
-    -- Button X to delete an item
     row:button({
       text = "X",
       textColor = COLOR_THEME_WARNING,
@@ -200,15 +184,7 @@ local function buildUi()
   end
 end
 
--- ============================================================================
--- Interface: init
--- ============================================================================
-
 function UI.init() end
-
--- ============================================================================
--- Interface: preCheck (version and module gates)
--- ============================================================================
 
 function UI.preCheck(_event)
   if deps.versionOk and App.checkCrsfModule() then
@@ -228,13 +204,7 @@ function UI.preCheck(_event)
   return 0
 end
 
--- ============================================================================
--- Interface: render
--- ============================================================================
-
--- Rebuild whenever App.rev moved: TEXT_EDIT's value is a build-time
--- snapshot, so a history fill or the Both flow's target flip only shows
--- through a fresh build.
+-- TEXT_EDIT's value is a build-time snapshot; rebuild on App.rev
 function UI.render(_event, _touchState)
   if UI.builtRev ~= App.rev then
     buildUi()

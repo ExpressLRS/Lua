@@ -1,13 +1,6 @@
 ---------------------------------------------------------------------------
 -- ELRS Telemetry Widget - Shared Top Bar UI                             --
--- Loaded via loadScript() from each per-screen ui/ file with            --
--- ({ Display }); returns the TopBarUI table.                            --
---                                                                       --
--- Same geometry as the stock Value widget in a top-bar zone, so it      --
--- lines up with one placed beside it: a STD row at the origin and a     --
--- MIDSIZE row 14 px (scaled) below, both left aligned, no background.   --
--- The small row carries the RSSI where a stock Value carries its source --
--- name; the big row is the LQ.                                          --
+-- Matches the stock Value widget's layout: RSSI over LQ.                --
 ---------------------------------------------------------------------------
 
 local ctx = ...
@@ -15,11 +8,9 @@ local Display = ctx.Display
 
 local TopBarUI = {}
 
-local VALUE_Y = math.floor(14 * lvgl.LCD_SCALE + 0.5)
+local VALUE_Y = math.floor(14 * lvgl.LCD_SCALE + 0.5) -- stock Value widget offset
 
---- The top bar sits on the dark header, so it needs PRIMARY2 where
---- Display.heroColor uses PRIMARY1. Disconnected takes the disabled grey a
---- stock Value gives stale telemetry.
+-- PRIMARY2: the top bar is on the dark header.
 local function barColor()
   if not Display.isConnected() then
     return COLOR_THEME_DISABLED
@@ -47,7 +38,6 @@ local function bigText()
   return table.concat({ Display.lqHeroText(), "%" })
 end
 
---- Top bar: RSSI over LQ, in the stock Value widget's label-over-value layout.
 function TopBarUI.build(w, h)
   lvgl.build({
     {

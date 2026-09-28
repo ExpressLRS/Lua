@@ -1,6 +1,5 @@
 ---- #########################################################################
----- # BW LCD UI: Rendering, input handling, cursor management            #
----- # For black & white radios (no LVGL required)                        #
+---- # Bind tool UI for black & white radios                                 #
 ---- #########################################################################
 
 local deps = ...
@@ -13,16 +12,12 @@ local VERSION = deps.VERSION
 local TextEdit = loadScript("/SCRIPTS/ELRS/ui/lcd/text_edit.lua")()
 local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lcd/dialogs.lua")()
 
--- ============================================================================
--- UI state
--- ============================================================================
-
--- Row ids (numeric to save RAM). History items are encoded as HIST_BASE + i.
+-- Numeric ids save RAM; history rows are HIST_BASE + i
 local ROW_PHRASE = 1
 local ROW_TARGET = 2
 local ROW_UID = 3
 local ROW_SET = 4
-local ROW_BIND = 5 -- renders Bind or Unbind depending on the link
+local ROW_BIND = 5 -- Bind or Unbind, by link state
 local ROW_HISTORY = 6
 local ROW_EXIT = 7
 local ROW_CLEAR = 8
@@ -38,7 +33,6 @@ local PAGE_HISTORY = 2
 local TARGET_NAMES = { "TX", "RX", "Both" }
 
 local UI = {
-  -- Cursor/selection state (owned entirely by this module)
   page = PAGE_MAIN,
   lineIndex = 1,
   rows = {},
@@ -46,41 +40,30 @@ local UI = {
   ---@type table constructed in init(), needs LCD_W for the window
   phraseEdit = nil,
 
-  -- Pending confirmation popup: { msg, i (history index) or nil = clear all }
+  -- { msg, i = history index, or nil to clear all }
   confirm = nil,
 
-  -- Layout constants for 128x64; UI.init widens COL2 at 212px wide
+  -- 128x64; init widens COL2 on 212 px
   COL1 = 0,
   COL2 = 70,
   textSize = 8,
   textYoffset = 3,
 
-  -- Redraw state: the page repaints on events and whenever the live status
-  -- line changes (statusLine below), tracked as a string compare per frame.
   forceRedraw = true,
   lastStatus = nil,
 }
 
--- Both pages fit the 8-row 128x64 grid (main 7 rows, history at most 7),
--- so there is no scrolling and no page offset in this UI.
-
--- ============================================================================
--- Interface: init
--- ============================================================================
+-- Both pages fit 8 rows on 128x64: no scrolling
 
 function UI.init()
   if LCD_W == 212 then
     UI.COL2 = 110
   end
 
-  -- The phrase window ends at the cursor; 6 px per char of the fixed BW font
+  -- 6 px per char of the fixed BW font
   UI.phraseEdit = TextEdit.new(msp.CONST.PHRASE_MAX, math.floor((LCD_W - UI.COL2 - 2) / 6))
   UI.phraseEdit.value = App.phrase
 end
-
--- ============================================================================
--- Interface: preCheck (version and module gates)
--- ============================================================================
 
 function UI.preCheck(event)
   if not deps.versionOk then
@@ -97,10 +80,6 @@ function UI.preCheck(event)
   end
   return nil
 end
-
--- ============================================================================
--- Row list
--- ============================================================================
 
 local function buildRows()
   local rows = UI.rows
@@ -129,7 +108,7 @@ local function buildRows()
   end
 end
 
---- The UID/status row text: compact so it fits 128 px at SMLSIZE.
+-- Compact to fit 128 px at SMLSIZE
 local function statusLine()
   if App.statusText then
     return App.statusText
@@ -138,10 +117,6 @@ local function statusLine()
   local prefix = (App.uidFrom == crsf.CONST.ADDRESS_RX) and "RX" or "TX"
   return string.format("%s: %d,%d,%d,%d,%d,%d", prefix, u[1], u[2], u[3], u[4], u[5], u[6])
 end
-
--- ============================================================================
--- Navigation and actions
--- ============================================================================
 
 local function selectRow(step)
   local count = #UI.rows
@@ -196,7 +171,6 @@ local function handleEnter(id)
 end
 
 local function handleEvent(event)
-  -- Phrase editing captures every event until it commits
   if UI.phraseEdit.editing then
     if UI.phraseEdit:handleEvent(event) then
       App.phrase = UI.phraseEdit.value
@@ -204,7 +178,6 @@ local function handleEvent(event)
     return
   end
 
-  -- Target edit: rotary cycles, ENTER or EXIT commits
   if UI.editTarget then
     if event == EVT_VIRTUAL_NEXT then
       App.target = math.min(App.target + 1, App.TARGET_BOTH)
@@ -237,14 +210,10 @@ local function handleEvent(event)
   end
 end
 
--- ============================================================================
--- Rendering
--- ============================================================================
-
 local function drawTitle()
   lcd.drawFilledRectangle(0, 0, LCD_W, UI.textSize + 1, GREY_DEFAULT)
   lcd.drawText(UI.COL1 + 1, 1, "ExpressLRS Bind Tool", INVERS)
-  -- Link flag: C while RX telemetry is alive, - otherwise
+  -- C while RX telemetry is alive
   lcd.drawText(LCD_W - 1, 1, crsf.hasTelemetry and "C" or "-", INVERS + RIGHT)
 end
 
@@ -285,19 +254,14 @@ local function drawPage(event)
   lcd.clear()
   drawTitle()
 
+  -- No scrolling: each page is at most 7 rows
   for i = 1, #UI.rows do
     drawRow(UI.rows[i], i * UI.textSize + UI.textYoffset, UI.lineIndex == i)
   end
 end
 
--- ============================================================================
--- Interface: render
--- ============================================================================
-
 function UI.render(event, _touchState)
-  -- Pending confirmation owns the screen until answered. It arms only after
-  -- a quiet frame: the ENTER release that follows the long press which
-  -- opened it would otherwise answer it on the spot.
+  -- Arm after a quiet frame, or the long press's ENTER release answers it
   if UI.confirm then
     local result = popupConfirmation(UI.confirm.msg, "PRESS [OK] to confirm", event)
     if not UI.confirm.armed then
@@ -321,8 +285,6 @@ function UI.render(event, _touchState)
     return
   end
 
-  -- Repaint on any event, while editing, and whenever the live parts of the
-  -- page (status line, link flag) changed since the last paint.
   local status = statusLine() .. (crsf.hasTelemetry and "C" or "-")
   if event ~= 0 or UI.forceRedraw or UI.phraseEdit.editing or status ~= UI.lastStatus then
     drawPage(event)

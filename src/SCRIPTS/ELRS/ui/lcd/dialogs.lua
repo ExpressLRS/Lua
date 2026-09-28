@@ -1,22 +1,12 @@
 ---------------------------------------------------------------------------
 -- B&W Dialogs                                                           --
--- Loaded via loadScript() with no arguments; returns the Dialogs table. --
--- Shared by every tool's B&W UI.                                        --
---                                                                       --
--- Full-screen dialog: MIDSIZE title, body lines, and an optional row of --
--- action labels along the bottom. Redrawn every frame; the caller       --
--- handles the keys.                                                     --
 ---------------------------------------------------------------------------
 
 local Dialogs = {}
 
--- B&W text row height
 local TEXT_H = 8
 
---- Clear the screen and draw a dialog.
--- @param title    heading, drawn MIDSIZE
--- @param lines    array of body lines
--- @param actions  optional { left, right } action labels for the bottom row
+--- actions: optional { left, right } labels
 function Dialogs.draw(title, lines, actions)
   lcd.clear()
   local y = 0
@@ -37,8 +27,6 @@ function Dialogs.draw(title, lines, actions)
   end
 end
 
---- The EdgeTX version gate.
--- @param versions  REQUIRED_VERSIONS from SCRIPTS/ELRS/edgetx_version.lua
 function Dialogs.drawVersionRequired(versions)
   local lines = { "Requires EdgeTX:" }
   for i, version in ipairs(versions) do
@@ -47,7 +35,6 @@ function Dialogs.drawVersionRequired(versions)
   Dialogs.draw("Unsupported", lines)
 end
 
---- No CRSF module configured on the model.
 function Dialogs.drawNoModule()
   Dialogs.draw(" No ExpressLRS", {
     "Enable a CRSF Internal",

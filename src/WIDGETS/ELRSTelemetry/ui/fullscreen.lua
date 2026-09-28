@@ -1,39 +1,16 @@
 ---------------------------------------------------------------------------
 -- ELRS Telemetry Widget - Full-Screen Page                              --
--- Loaded via loadScript() from ELRSTelemetry/loadable.lua with          --
--- (Telemetry, Display); returns the FullScreenUI table.                 --
---                                                                       --
--- One layout for every screen size, because lvgl.page() handles the     --
--- responsive part: the link, power, flight controller and GPS rows, and --
--- the no-module checklist in place of all of them.                      --
---                                                                       --
--- Loaded lazily, on the first full-screen entry. Only one widget can be --
--- full screen at a time, so eager loading would leave this resident in  --
--- every other instance for nothing.                                     --
---                                                                       --
--- build() runs on entry, not per frame: EdgeTX calls a widget's         --
--- update() when it is constructed, when it enters or leaves full        --
--- screen, and when its options are edited. Every value here is a        --
--- per-frame text or color callback, so nothing on the page needs a      --
--- rebuild to stay current.                                              --
+-- Built on entry only; values refresh via callbacks.                    --
 ---------------------------------------------------------------------------
 
 local Telemetry, Display = ...
 
 local FullScreenUI = {}
 
--- ============================================================================
--- Row helpers
--- ============================================================================
-
--- Portrait screens get a narrower label column to leave more room for values.
+-- Narrower labels on portrait.
 local LABEL_PCT = (LCD_W < LCD_H) and 42 or 50
 
---- Wrap a value formatter so a row reads "--" while the link is down.
---- The link, power, satellite, speed and altitude rows take this. The flight
---- controller rows have their own fallbacks, and latitude/longitude keep showing
---- the last known position after the link drops -- that is what you read when
---- you are looking for a model that stopped answering.
+-- "--" while the link is down.
 local function whenConnected(fn)
   return function()
     if not Telemetry.isConnected() then
@@ -85,10 +62,6 @@ local function createSectionHeader(container, title)
   })
 end
 
--- ============================================================================
--- The page
--- ============================================================================
-
 function FullScreenUI.build()
   lvgl.clear()
 
@@ -100,9 +73,7 @@ function FullScreenUI.build()
     end,
   })
 
-  -- No module — show checklist instead of telemetry. Decided at build time on
-  -- purpose: module presence is a Model Setup fact, and changing it means
-  -- leaving this page, which rebuilds it on the way back in.
+  -- Rebuilt on re-entry, so checking once is enough.
   if not Telemetry.hasModule() then
     local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
     local heading = { type = lvgl.LABEL, text = "No module found. Check Model Setup:", color = COLOR_THEME_PRIMARY1 }
@@ -124,7 +95,6 @@ function FullScreenUI.build()
     flexFlow = lvgl.FLOW_COLUMN,
   })
 
-  -- Model mismatch warning banner
   fields:build({
     {
       type = lvgl.LABEL,
@@ -135,16 +105,12 @@ function FullScreenUI.build()
     },
   })
 
-  -- Link Status section
   createSectionHeader(fields, "Link Status")
 
   createDisplayRow(fields, "RF Mode", Display.rfModeText)
 
   createDisplayRow(fields, "Link Quality", Display.lqValueText)
 
-  -- Both antennas on one row in fixed 1 / 2 order, as the module's own screen
-  -- and the compact tiers print them, so neither number jumps when the
-  -- receiver switches paths. A single-path receiver gets the bare reading.
   createDisplayRow(
     fields,
     "RSSI",
@@ -182,9 +148,7 @@ function FullScreenUI.build()
       if not Telemetry.hasDiversity() then
         return "N/A"
       end
-      -- EdgeTX's telemetry list prints the raw ANT enum (0/1) and so does the TX
-      -- module's own screen. The "Ant " prefix keeps this row from reading as that
-      -- same number, and 1/2 matches the order of the RSSI pair above.
+      -- 1-based on purpose; EdgeTX shows raw ANT 0/1
       if Telemetry.link.ant == 0 then
         return "Ant 1"
       end
@@ -195,9 +159,6 @@ function FullScreenUI.build()
     end)
   )
 
-  -- Sensitivity and Link Margin sit directly under the RSSI rows and share
-  -- their unit, so the arithmetic between the three is visible: this is what
-  -- the receiver is rated to hear, and this is how far above it you are.
   createDisplayRow(
     fields,
     "Sensitivity",
@@ -223,7 +184,6 @@ function FullScreenUI.build()
     Display.detailColor
   )
 
-  -- Power section
   createSectionHeader(fields, "Power")
 
   createDisplayRow(
@@ -238,7 +198,6 @@ function FullScreenUI.build()
     end)
   )
 
-  -- Flight Controller section
   createSectionHeader(fields, "Flight Controller")
 
   createDisplayRow(fields, "Battery", Display.batteryTextVerbose)
@@ -259,7 +218,6 @@ function FullScreenUI.build()
     return tostring(fm)
   end)
 
-  -- GPS section
   createSectionHeader(fields, "GPS")
 
   createDisplayRow(
@@ -298,6 +256,7 @@ function FullScreenUI.build()
     end)
   )
 
+  -- Last known position survives link loss.
   createDisplayRow(fields, "Latitude", function()
     if Telemetry.gps == nil then
       return "--"

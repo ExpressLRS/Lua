@@ -1,29 +1,19 @@
 ---------------------------------------------------------------------------
 -- 6POS Preset Storage                                                   --
 -- Loaded via loadScript() from ELRSVTXAdmin/main.lua with (FileStorage) --
--- and shared by every widget instance; returns the PresetsStorage table.--
---                                                                       --
--- Settings store: six preset collections, the active collection, the    --
--- sources and flags, and their persistence as a key=value file -- plus  --
--- the radio-wide automation latches, which live here because an edge    --
--- must be consumed exactly once per radio. The automation that acts on  --
--- them lives in VTXAdmin.                                               --
+-- and shared by every widget instance.                                  --
 ---------------------------------------------------------------------------
 
 local FileStorage = ...
 
--- Where the settings live on the SD card
 local PATH = "/WIDGETS/ELRSVTXAdmin/presets.txt"
 
--- Six collections of six slots, one slot per 6POS switch position.
+-- One slot per 6POS position
 local COLLECTION_COUNT = 6
 local SLOT_COUNT = 6
 
--- The file layout, declared once: FileStorage writes these keys in this order.
--- Scalars first, then one line per collection -- "band,channel" pairs joined
--- with ";". Worst case ~225 bytes, well inside FileStorage's bounded 512-byte
--- read; outgrowing that cap would truncate silently and the next save would
--- write defaults over the tail collections, so keep the budget in mind here.
+-- Worst case ~225 bytes. FileStorage reads 512; past that the tail
+-- collections are lost and reset to defaults on the next save.
 local SAVE_KEYS = { "enabled", "source", "autoPushVtx", "pushSource", "collection" }
 local COLLECTION_KEYS = {}
 for c = 1, COLLECTION_COUNT do
@@ -32,36 +22,25 @@ for c = 1, COLLECTION_COUNT do
 end
 
 local PresetsStorage = {
-  -- Exposed for the editor's collection dropdown, so the count has one home.
   COLLECTION_COUNT = COLLECTION_COUNT,
 
-  -- collections[c][i] = { band, channel }, c and i both 1..6.
+  -- collections[c][i] = { band, channel }
   collections = {},
 
-  -- The active collection's slots: an alias of collections[collection], the
-  -- same table and never a copy, so writes through items land in the
-  -- collection. Every reader indexes PresetsStorage.items on each access and
-  -- none holds it across calls, so re-pointing it here switches the 6POS
-  -- automation, the cheatsheet and the editor rows at once.
+  -- Alias of collections[collection]; read it each time, never cache it
   items = {},
 
-  -- Active collection, 1..6. Selects both what the 6POS switch applies and
-  -- what the full-screen preset rows edit -- one selector, no second mode.
   collection = 1,
 
-  -- Radio-wide automation latches, never persisted. They live on the shared
-  -- store rather than on a widget instance because an edge -- a 6POS movement,
-  -- a collection change, a push trigger -- must be consumed exactly once per
-  -- radio: the first instance whose session can act consumes it, and the rest
-  -- see no edge.
+  -- Not persisted; shared so each edge is consumed once per radio
   latch = {
-    lastPos = -1, -- last consumed 6POS position (cheatsheet highlight reads this)
-    lastCollection = -1, -- the collection lastPos was resolved through
+    lastPos = -1, -- last consumed 6POS position
+    lastCollection = -1,
     stablePos = -1, -- debounce candidate
     stableTime = 0,
-    ---@type boolean? push trigger level; nil until the source adopt seeds it
+    ---@type boolean?
     pushLastHigh = nil,
-    pushSourceSeen = 0, -- the source pushLastHigh was sampled from
+    pushSourceSeen = 0, -- source pushLastHigh came from
   },
 
   enabled = false,
@@ -70,7 +49,6 @@ local PresetsStorage = {
   pushSource = 0, -- source ID for manual "Send VTx" trigger (0 = not configured)
 }
 
---- Split "band,channel" using plain string.find (no regex).
 local function splitBandChannel(val)
   local comma = string.find(val, ",", 1, true)
   if not comma then
@@ -79,9 +57,7 @@ local function splitBandChannel(val)
   return tonumber(string.sub(val, 1, comma - 1)), tonumber(string.sub(val, comma + 1))
 end
 
---- Split a "band,channel;band,channel;..." collection line into up to
---- SLOT_COUNT slots, using plain string.find (no regex). Invalid or missing
---- segments stay nil so the caller fills defaults per slot.
+--- Invalid segments stay nil and get defaults.
 local function splitSlots(val)
   local slots = {}
   local pos = 1
@@ -103,10 +79,8 @@ local function splitSlots(val)
   return slots
 end
 
---- Schema: enabled/autoPushVtx are "1"/"0" booleans, source/pushSource are
---- source IDs, collection is the active index 1..6, and c1..c6 are collection
---- lines of "band,channel" pairs joined with ";", slots defaulting to
---- Raceband R1..R6.
+--- presets.txt: enabled/autoPushVtx "1"/"0", source/pushSource are source
+--- IDs, collection 1..6, c1..c6 = "band,channel;...". Default slots R1..R6.
 function PresetsStorage.load()
   local kv = FileStorage.read(PATH) or {}
   PresetsStorage.enabled = (kv.enabled == "1")
@@ -117,7 +91,6 @@ function PresetsStorage.load()
   local collections = {}
   for c = 1, COLLECTION_COUNT do
     local slots = splitSlots(kv[COLLECTION_KEYS[c]] or "")
-    -- Fill missing slots with Raceband defaults (R1..R6)
     for i = 1, SLOT_COUNT do
       if not slots[i] then
         slots[i] = { band = 5, channel = i }
@@ -154,10 +127,7 @@ function PresetsStorage.save()
   FileStorage.write(PATH, SAVE_KEYS, values)
 end
 
---- Make a collection active and persist the choice. A single assignment, never
---- an in-place rebuild: display.lua and fullscreen.lua index items[i] from
---- LVGL callbacks that can land on any frame, and a half-built table there is
---- a nil index -- which makes the build fail silently and the whole UI vanish.
+--- Swap items in one assignment: LVGL callbacks may read it any frame.
 function PresetsStorage.selectCollection(c)
   if c < 1 or c > COLLECTION_COUNT then
     return
@@ -170,7 +140,6 @@ function PresetsStorage.selectCollection(c)
   PresetsStorage.save()
 end
 
--- Initialize presets from file
 PresetsStorage.load()
 
 return PresetsStorage

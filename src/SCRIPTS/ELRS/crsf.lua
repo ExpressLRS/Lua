@@ -1,15 +1,9 @@
 ---------------------------------------------------------------------------
 -- CRSF Protocol Singleton                                               --
 --                                                                       --
--- Shared CRSF transport: protocol constants, pop/push wrappers (and     --
--- their simulator mock seam) and link-layer decoders. Frames are        --
--- consumed pull-style: every consumer drains its own script instance's  --
--- queue through CRSF.drain() (the firmware replicates incoming frames   --
--- into each widget instance's private queue on color radios; on B&W the --
--- standalone tool is the only consumer). Derived link state             --
--- (hasTelemetry) refreshes as a drain empties the queue.                --
---                                                                       --
--- Loaded once via loadScript() from /SCRIPTS/ELRS/crsf.lua.             --
+-- Protocol constants, pop/push (with the simulator mock seam) and       --
+-- link-layer decoders. Each script instance has its own frame queue on  --
+-- colour radios; consumers drain theirs with CRSF.drain().              --
 ---------------------------------------------------------------------------
 
 local shim = loadScript("/SCRIPTS/ELRS/shim.lua")()
@@ -86,25 +80,16 @@ CRSF.CONST = {
   MODULE_TYPE_CROSSFIRE = 5,
 }
 
--- ============================================================================
--- Internal state
--- ============================================================================
-
--- Link state: derived from RQly as a drain empties the queue
+-- Refreshed each time a drain empties the queue
 CRSF.hasTelemetry = false
 
 -- ============================================================================
--- Default telemetry wrappers: delegate to real EdgeTX functions
--- When mocking is active, setMock() replaces the underlying implementations
+-- Transport (setMock() swaps these in the simulator)
 -- ============================================================================
 
---- Pop one frame from the calling script instance's queue.
--- consumer identifies the caller to the simulator mock, which emulates the
--- firmware's per-widget queue replication with per-consumer cursors; real
--- hardware ignores it. An empty-queue return is the end of a drain, so the
--- derived link state refreshes here: frames are always ingested before
--- consumers can observe a hasTelemetry flip. The ELRS TX zeroes RQly on
--- disconnect, so a present, positive value is the truth about the link.
+--- Pop one frame. consumer is only used by the simulator mock.
+-- Link state refreshes only on an empty pop, so frames land before the flip.
+-- The TX zeroes RQly on disconnect.
 function CRSF.pop(consumer)
   local command, data = CRSF._popImpl(consumer)
   if command == nil then
@@ -117,10 +102,8 @@ function CRSF._popImpl(_consumer)
   return crossfireTelemetryPop()
 end
 
---- Drain the calling script instance's queue, routing every frame through
--- onFrame(consumer, command, data). consumer is both the queue identity
--- handed to pop() and the receiver onFrame is invoked on, so consumers
--- pass their routing method directly: CRSF.drain(self, self._onFrame).
+--- Calls onFrame(consumer, command, data) for every queued frame,
+-- e.g. CRSF.drain(self, self._onFrame).
 function CRSF.drain(consumer, onFrame)
   local command, data
   repeat
@@ -135,12 +118,9 @@ function CRSF.push(command, data)
   return crossfireTelemetryPush(command, data)
 end
 
--- Read a telemetry sensor value by name (/SCRIPTS/ELRS/sensors.lua)
 CRSF.getSensorValue = sensors.getSensorValue
 
--- Drop the cached sensor IDs, which belong to the model that was loaded when
--- they were resolved. Whoever observes the model-change edge calls this; the
--- simulator mock reads by name and has no cache, so it needs no counterpart.
+-- Call on model change: sensor IDs are per model
 CRSF.resetSensorCache = sensors.resetCache
 
 function CRSF.hasCrsfModule()
@@ -154,7 +134,7 @@ function CRSF.hasCrsfModule()
 end
 
 -- ============================================================================
--- Simulator integration (mirrors expresslrs.lua setMock pattern)
+-- Simulator
 -- ============================================================================
 
 local function setMock()
@@ -183,13 +163,8 @@ setMock = nil
 -- Shared helpers
 -- ============================================================================
 
---- Read a null-terminated string from a CRSF data array, converting the
--- bytes to chars in place and concatenating the slice. The frame table is
--- freshly allocated by every pop, and each frame type has exactly one
--- string-decoding consumer (DEVICE_INFO and ELRS_STATUS decode only here),
--- so mutating it is safe and saves a parts table per string. A second
--- decode of the same frame would raise (string.char on a string) rather
--- than corrupt silently.
+--- Read a null-terminated string, converting bytes to chars in place.
+-- Safe because each pop returns a fresh table; decode a frame only once.
 -- @param data   array of byte values
 -- @param off    1-based start offset
 -- @return string, nextOffset
@@ -256,21 +231,16 @@ function CRSF:decodeElrsStatus(data)
   }
 end
 
---- ELRS 1.x signature: an inbound PARAMETER_WRITE addressed to the handset
--- from the TX module; 3.x+ never writes to the handset. Reads data[1] (the
--- destination) deliberately -- unlike the decoders above, which leave gating
--- on the source to the caller.
+--- ELRS 1.x signature: a PARAMETER_WRITE from the TX to the handset.
+-- 3.x+ never writes to the handset.
 -- @param data  array of byte values
 -- @return true when the frame matches the 1.x signature, nil otherwise
 function CRSF:isElrsV1Frame(data)
   return (data[1] == CRSF.CONST.ADDRESS_HANDSET and data[2] == CRSF.CONST.ADDRESS_TX) or nil
 end
 
---- Send a DEVICE_PING.
--- A ping addressed to a specific device is answered on the handset UART and
--- never forwarded over the air; a broadcast ping is also forwarded to the RX
--- while the link is up, costing over-the-air round trips. Broadcast only when
--- discovering remote devices.
+--- Send a DEVICE_PING. A broadcast is also forwarded over the air to the
+-- RX; address a device directly unless discovering remote ones.
 -- @param dest  CRSF device address (use CRSF.CONST.ADDRESS_*); nil broadcasts
 function CRSF:pingDevices(dest)
   CRSF.push(CRSF.CONST.FRAMETYPE_DEVICE_PING, { dest or CRSF.CONST.ADDRESS_BROADCAST, CRSF.CONST.ADDRESS_HANDSET })
@@ -282,9 +252,8 @@ function CRSF:requestElrsStatus()
   CRSF.push(CRSF.CONST.FRAMETYPE_PARAMETER_WRITE, { CRSF.CONST.ADDRESS_TX, CRSF.CONST.ADDRESS_HANDSET, 0, 0 })
 end
 
---- Send a COMMAND bind request. Addressed to the TX module it enters bind
--- mode, transmitting to any RX waiting in bind mode; addressed to the RX it
--- unbinds a connected receiver.
+--- Send a COMMAND bind request: to the TX it enters bind mode, to the RX
+-- it unbinds the receiver.
 -- @param dest  CRSF device address (use CRSF.CONST.ADDRESS_*); nil targets the TX
 function CRSF:sendBindCommand(dest)
   CRSF.push(CRSF.CONST.FRAMETYPE_COMMAND, {
@@ -294,9 +263,5 @@ function CRSF:sendBindCommand(dest)
     CRSF.CONST.COMMAND_SUBCMD_RX_BIND,
   })
 end
-
--- ============================================================================
--- Return singleton
--- ============================================================================
 
 return CRSF

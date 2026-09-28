@@ -1,15 +1,7 @@
 ---------------------------------------------------------------------------
--- ELRS Telemetry Widget - Wiring                                       --
--- Loaded via loadScript() from ELRSTelemetry/main.lua with             --
--- (zone, options, Telemetry); returns the widget instance table.       --
---                                                                      --
--- One of these exists per placed widget. It owns no state of its own:  --
--- everything it shows lives in the Telemetry singleton, which outlives --
--- it. All this file does is pick the layout for the screen, wire the   --
--- components together, and drive them from the widget callbacks.       --
---                                                                      --
--- The minimized layout is per screen size; the full-screen page is     --
--- shared, because lvgl.page() handles the responsive part itself.      --
+-- ELRS Telemetry Widget - Wiring                                        --
+-- Loaded via loadScript() from ELRSTelemetry/main.lua with              --
+-- (zone, options, Telemetry); returns the widget instance table.        --
 ---------------------------------------------------------------------------
 
 local zone, options, Telemetry = ...
@@ -25,7 +17,6 @@ local Components = loadScript("/WIDGETS/ELRSTelemetry/ui/components.lua")(Displa
 -- Screen detection and UI loading
 -- ============================================================================
 
---- Detect screen resolution and return an ID for the per-screen UI file.
 local function getScreenId()
   local w, h = LCD_W, LCD_H
   if w >= 800 then
@@ -64,9 +55,7 @@ local wgt = {
   options = options,
 }
 
--- drain() is per instance and ungated: this instance owns a pop queue in the
--- firmware that only it can empty. update() is shared and samples at most once
--- per tick, so the instances after the first fall through it.
+-- drain() per instance (each owns a pop queue); update() runs once per tick
 function wgt.background()
   Telemetry.drain()
   Telemetry.update()
@@ -78,12 +67,7 @@ end
 
 local FullScreenUI
 
---- Build the full-screen page, loading it the first time it is asked for.
---- Only one widget can be full screen at a time, so loading it eagerly would
---- leave a page builder resident in every instance that never shows one.
---- Nothing is lost by waiting: update() is not a hot path -- EdgeTX calls it
---- on construction, on entering and leaving full screen, and on an options
---- edit -- so a loadScript here costs nothing.
+-- Loaded lazily; only one widget can be full screen
 local function buildFullScreen()
   if not FullScreenUI then
     FullScreenUI = loadScript("/WIDGETS/ELRSTelemetry/ui/fullscreen.lua")(Telemetry, Display)
@@ -100,11 +84,9 @@ function wgt.update(newOptions)
   end
 end
 
--- Populate the snapshot before the first paint: update() runs callRefs without a
--- preceding refresh(), so label callbacks can fire before the first background tick.
+-- Label callbacks can fire before the first refresh()
 Telemetry.update()
 
--- Initial build
 WidgetUI.build(wgt.zone, wgt.options)
 
 return wgt

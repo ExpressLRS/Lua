@@ -1,27 +1,23 @@
 ---- #########################################################################
 ---- # Navigation Module: Folder navigation stack and methods             #
----- # Zero dependencies on other modules                                 #
 ---- #########################################################################
 
 local Navigation = {
   stack = {},
-  -- Navigation entry type constants (integers to save RAM vs strings)
-  TYPE_FOLDER = 0,
+  TYPE_FOLDER = 0, -- ints, not strings: saves RAM on B&W
   TYPE_DEVICE = 1,
-  -- Synthetic folder IDs
   FOLDER_OTHER_DEVICES = -1,
 }
 
 function Navigation.getCurrent()
   local top = Navigation.stack[#Navigation.stack]
-  return top and top.id or nil -- nil if at root (or device root)
+  return top and top.id or nil
 end
 
 function Navigation.isAtRoot()
   return #Navigation.stack == 0
 end
 
--- Check if the user has navigated into a device (for hiding "Other Devices")
 function Navigation.hasDeviceEntry()
   for _, entry in ipairs(Navigation.stack) do
     if entry.type == Navigation.TYPE_DEVICE then
@@ -31,8 +27,7 @@ function Navigation.hasDeviceEntry()
   return false
 end
 
--- viewState: optional table of UI state to preserve (e.g. cursor position).
--- Merged into the nav entry so the UI can restore it on goBack().
+-- viewState (e.g. cursor) is restored on goBack()
 function Navigation.openFolder(folderId, folderName, viewState)
   local entry = {
     type = Navigation.TYPE_FOLDER,

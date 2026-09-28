@@ -1,22 +1,12 @@
 -- TNS|ExpressLRS Bind|TNE
 ---- #########################################################################
----- #                                                                       #
----- # ExpressLRS bind phrase manager for BW and color LCD radios            #
----- # (EdgeTX 2.11.6+/2.12.1+). Reads and writes the bind phrase / UID      #
----- # over MSP; the device side requires ExpressLRS 4.1+.                   #
----- #                                                                       #
+---- # ExpressLRS bind phrase manager; needs ExpressLRS 4.1+ (MSP)           #
 ---- # License GPLv2: http://www.gnu.org/licenses/gpl-2.0.html               #
 ---- #########################################################################
 
 local VERSION = "r1"
 local useLvgl = (lvgl ~= nil)
 
--- ============================================================================
--- Load shared modules
--- ============================================================================
-
--- The loader is the one shared part that must bootstrap with a bare
--- loadScript; it owns the GC-before-load discipline.
 ---@diagnostic disable-next-line: need-check-nil
 local loader = loadScript("/SCRIPTS/ELRS/loader.lua")()
 
@@ -28,32 +18,25 @@ local History = loader("/SCRIPTS/TOOLS/ExpressLRSBind/history_storage.lua", File
 local isVersionSupported, requiredVersions = loader("/SCRIPTS/ELRS/edgetx_version.lua")
 local versionOk = isVersionSupported()
 
--- ============================================================================
--- App Module: business logic shared by both UI frontends
--- ============================================================================
-
--- Scheduler constants (getTime() ticks of 10 ms)
-local UID_RETRY_TICKS = 50 -- resend an unanswered UID read after 500 ms
-local UID_MAX_ATTEMPTS = 12 -- 6s of retries while module reboots
-local FOLLOWUP_TICKS = 100 -- settle time before a follow-up after a write
+-- getTime() ticks (10 ms)
+local UID_RETRY_TICKS = 50
+local UID_MAX_ATTEMPTS = 12 -- 6 s, outlasts a module reboot
+local FOLLOWUP_TICKS = 100 -- settle after a write
 
 local App = {
-  -- Target selector positions (order matches the UIs' choice lists)
+  -- Order matches the UIs' choice lists
   TARGET_TX = 1,
   TARGET_RX = 2,
   TARGET_BOTH = 3,
 
   target = 1,
   phrase = "",
-  bothStep = nil, -- TARGET_RX while the Both sequence's RX leg is in flight
-  uid = {}, -- reused 6-slot byte table, filled by msp.decodeUid
-  uidFrom = nil, -- source address of the last UID answer; nil until one lands
-  statusText = "Idle", -- transient status line; nil shows the UID bytes
+  bothStep = nil, -- TARGET_RX during Both's RX write
+  uid = {}, -- filled by msp.decodeUid
+  uidFrom = nil,
+  statusText = "Idle", -- nil shows the UID
   uidAttempts = 0,
-  -- Bumped only when a build-time snapshot must refresh (the TEXT_EDIT
-  -- value, the CHOICE selection). Everything else on the LVGL page reads
-  -- live getters, and a rebuild resets rotary focus -- so status and UID
-  -- updates must NOT bump this.
+  -- Bump only for build-time snapshots; a rebuild resets focus
   rev = 0,
   history = History,
 
@@ -71,7 +54,7 @@ function App.checkCrsfModule()
   return App.crsfModuleFound
 end
 
--- The TX module answers on the handset UART; the RX only over an active link.
+-- RX only answers over a live link
 function App.isTargetReachable()
   return App.target == App.TARGET_TX or (App.target == App.TARGET_RX and crsf.hasTelemetry)
 end
@@ -80,8 +63,6 @@ function App.isTargetReachableOrBoth()
   return App.target == App.TARGET_BOTH or App.isTargetReachable()
 end
 
---- Status line for the UIs: transient status while an exchange is in
--- flight, then the last UID answer.
 function App.uidLine()
   if App.statusText then
     return App.statusText
@@ -91,8 +72,7 @@ function App.uidLine()
   return string.format("%s: %d, %d, %d, %d, %d, %d", prefix, u[1], u[2], u[3], u[4], u[5], u[6])
 end
 
---- Parse one comma-separated segment as a plain decimal byte (surrounding
--- spaces allowed). No patterns: B&W-friendly byte walking.
+-- Decimal byte, spaces trimmed; no string patterns on B&W
 local function parseByte(part)
   local i = 1
   local j = #part
@@ -119,8 +99,7 @@ local function parseByte(part)
   return n
 end
 
---- Interpret the phrase text as a raw UID: 4-6 comma-separated bytes,
--- left-padded with zeros to 6. Returns nil when the text is a phrase.
+-- 4-6 comma-separated bytes, zero-padded to 6; nil for a phrase
 function App.parseUidText(text)
   local bytes = {}
   local pos = 1
@@ -151,9 +130,7 @@ function App.parseUidText(text)
   return uid
 end
 
---- Request the target's UID, retrying on silence. Bounded: an ELRS device
--- without MSP config support (pre-4.1) never answers, and the retry must
--- not spam the wire forever.
+-- Bounded: pre-4.1 devices never answer
 function App.requestUid()
   if not App.isTargetReachable() then
     App.statusText = "Idle"
@@ -170,15 +147,12 @@ function App.requestUid()
   defer.setTimeout(UID_RETRY_TICKS, App.requestUid)
 end
 
---- User-facing entry point: start a fresh UID request cycle.
 function App.startUidRequest()
   App.uidAttempts = 0
   App.requestUid()
 end
 
---- Send the phrase (or raw UID) to the selected target. "Both" is a
--- two-step sequence: the RX first -- writing its phrase drops it off the
--- link -- then the TX, after which the selector rests on Transmitter.
+-- Both: RX first, as the write drops it off the link, then TX
 function App.sendSet()
   if App.phrase == "" then
     return
@@ -188,8 +162,7 @@ function App.sendSet()
       App.bothStep = App.TARGET_RX
     else
       App.bothStep = nil
-      -- The selector visibly rests on Transmitter after the sequence; the
-      -- CHOICE renders its build-time selection, so this needs a rebuild.
+      -- CHOICE shows its build-time value; rebuild
       App.target = App.TARGET_TX
       App.rev = App.rev + 1
     end
@@ -219,14 +192,12 @@ local function markSent()
   App.statusText = "Sent"
 end
 
---- Put the TX module in bind mode, catching an RX waiting in bind mode.
 function App.sendBind()
   App.statusText = "Sending bind command..."
   crsf:sendBindCommand(crsf.CONST.ADDRESS_TX)
   defer.setTimeout(FOLLOWUP_TICKS, markSent)
 end
 
---- Unbind the connected receiver.
 function App.sendUnbind()
   App.statusText = "Sending unbind to RX..."
   crsf:sendBindCommand(crsf.CONST.ADDRESS_RX)
@@ -250,8 +221,6 @@ function App.clearHistory()
   History.clear()
 end
 
---- Frame router for crsf.drain(): the tool is the sole drainer in its Lua
--- state, and the only traffic it consumes is the MSP UID answer.
 function App.onFrame(_consumer, command, data)
   if command ~= crsf.CONST.FRAMETYPE_MSP_RESP then
     return
@@ -266,13 +235,9 @@ function App.onFrame(_consumer, command, data)
   App.uidAttempts = 0
 end
 
--- ============================================================================
--- UI loading (deferred to init)
--- ============================================================================
-
 local UI
 
--- Module table, forward-declared so init() can drop itself once it has run.
+-- Forward-declared so init() can drop itself
 local M = {}
 
 local function init()
@@ -291,24 +256,17 @@ local function init()
     UI = loader("/SCRIPTS/TOOLS/ExpressLRSBind/ui/lcd.lua", deps)
   end
   UI.init()
-  -- One tick of delay so run()'s first drain creates the telemetry queue
-  -- before the request's answer can land.
+  -- Wait for run()'s first drain to create the telemetry queue
   defer.setTimeout(1, App.startUidRequest)
-  -- The returned table stays on the standalone Lua stack and pins init(),
-  -- which holds VERSION and useLvgl as upvalues. Drop it.
+  -- The returned table stays on the Lua stack and would pin init()
   M.init = nil
 end
-
--- ============================================================================
--- Run (shared orchestrator)
--- ============================================================================
 
 local function run(event, touchState)
   if event == nil then
     return 2
   end
 
-  -- UI-specific pre-checks (version and module gates on both LVGL and BW paths)
   if UI.preCheck then
     local result = UI.preCheck(event)
     if result ~= nil then
@@ -317,7 +275,7 @@ local function run(event, touchState)
   end
 
   crsf.drain(App, App.onFrame)
-  -- After the drain, so a callback's push is answered before its follow-up
+  -- After drain, so a push is answered before its follow-up
   defer.poll()
 
   UI.render(event, touchState)
@@ -327,10 +285,6 @@ local function run(event, touchState)
   end
   return 0
 end
-
--- ============================================================================
--- Return
--- ============================================================================
 
 M.init = init
 M.run = run

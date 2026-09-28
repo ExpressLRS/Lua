@@ -2,15 +2,8 @@
 -- MSP-over-CRSF Codec                                                   --
 -- Loaded via loadScript() with (crsf); returns the Msp table.           --
 --                                                                       --
--- Stateless encoders and decoders for MSP frames tunnelled in CRSF      --
--- (frame types MSP_REQ/MSP_RESP/MSP_WRITE). Encoders return             --
--- (frameType, payload) for the caller to crsf.push(); decoders never    --
--- mutate the frame. Single-frame v1 traffic only: every message this    --
--- repo speaks (ELRS RXTX_CONFIG) fits one CRSF frame, so the chunked    --
--- transfer protocol (sequence numbers, reassembly, XOR CRC) is not      --
--- implemented. The firmware verifies no MSP CRC on these frames         --
--- (RxTxEndpoint.cpp reads the payload by offset), so encoders append    --
--- none, and the decoder ignores anything past the declared size.       --
+-- MSP frames tunnelled in CRSF. Single-frame v1 only: no chunking and   --
+-- no CRC (RxTxEndpoint.cpp reads the payload by offset and checks none) --
 ---------------------------------------------------------------------------
 
 local crsf = ...
@@ -40,15 +33,12 @@ Msp.CONST = {
   PHRASE_MAX = 52,
 }
 
--- Header of every outgoing frame: version 1, start-of-frame, sequence 0.
--- Single-frame messages never advance the sequence.
+-- v1, start-of-frame, sequence 0
 local HEADER = Msp.CONST.MSP_VERSION_V1 + Msp.CONST.MSP_STARTFLAG
 
--- Version bits mask within the status byte
 local VERSION_MASK = 0x60
 
---- Build the shared MSP payload layout: extended-frame addressing, header,
--- size (bytes after fn: subcommand plus data), function id, then args.
+--- dest, src, header, size (bytes after fn), fn, args
 local function encode(deviceId, handsetId, fn, args)
   local payload = { deviceId, handsetId, HEADER, #args, fn }
   for i = 1, #args do
@@ -117,10 +107,8 @@ end
 -- Decoders
 -- ============================================================================
 
---- Decode an MSP_RESP frame addressed to the handset. Accepts only v1
--- single-frame responses (start flag set); continuation chunks and other
--- MSP versions return nil. Source gating stays with the caller, matching
--- decodeDeviceInfo's convention.
+--- Decode a single-frame v1 MSP_RESP addressed to the handset. The caller
+-- gates on the source.
 -- @param data  array of byte values
 -- @return srcId, fn, offset, len  -- payload is data[offset .. offset+len-1]
 --         (subcommand first), or nil when the frame is not a complete
@@ -147,8 +135,7 @@ function Msp.decodeResponse(data)
   return data[2], fn, 6, size
 end
 
---- Decode an RXTX_CONFIG/UID answer into the caller-owned out[1..6]
--- (reused across frames: no per-frame table).
+--- Decode an RXTX_CONFIG/UID answer into the caller-owned out[1..6].
 -- @param data  array of byte values
 -- @param out   table receiving the six UID bytes
 -- @return srcId (source CRSF address) or nil when the frame is not a

@@ -1,38 +1,21 @@
 ---------------------------------------------------------------------------
 -- B&W Text Editor                                                       --
--- Loaded via loadScript() with no arguments; returns the TextEdit       --
--- table. Construct one instance per editable field: TextEdit.new().     --
---                                                                       --
--- A Lua port of the firmware's editName() (gui/common/stdlcd/           --
--- draw_functions.cpp:178), so editing a string in a tool feels exactly  --
--- like editing a model name: the cursor starts on the first char,       --
--- rotary cycles that char through the name charset (clamped at the      --
--- ends, case preserved), ENTER advances the cursor, PAGE keys move it   --
--- back and forth within the value, ENTER on the last cell or long       --
--- ENTER on a space commits, and long ENTER on a letter                  --
--- toggles its case. EXIT also commits -- edits are applied to the       --
--- value as they are made, never reverted. Trailing spaces are stripped  --
--- on commit; deletion is overwriting with spaces.                       --
+-- Port of the firmware's editName() (stdlcd/draw_functions.cpp).        --
+-- Edits apply live; EXIT commits too. Trailing spaces are stripped.     --
 ---------------------------------------------------------------------------
 
 local TextEdit = {}
 TextEdit.__index = TextEdit
 
--- The firmware's nameChars. Digits and the comma are in it, so a raw UID
--- ("0,1,2,3,4,5") can be entered with the same editor.
+-- Firmware nameChars; digits and ',' let a raw UID be typed
 local CHARS = " abcdefghijklmnopqrstuvwxyz0123456789_-,."
 
---- Index of a char in CHARS, upper-case letters mapping like their
--- lower-case form (nameCharIdx in the firmware). Unknown chars map to
--- the leading space.
 local function charIdx(c)
   local b = string.byte(c)
   if b >= 65 and b <= 90 then
     c = string.char(b + 32)
   end
   local idx = string.find(CHARS, c, 1, true)
-  -- "." is no pattern here thanks to the plain flag; the charset has no
-  -- other metachars.
   return idx or 1
 end
 
@@ -46,10 +29,7 @@ local function isLower(c)
   return b ~= nil and b >= 97 and b <= 122
 end
 
---- Construct an editor instance.
--- @param maxLen   maximum value length in chars
--- @param visible  chars that fit the row; longer values draw a window
---                 ending at the cursor
+--- visible: chars that fit the row
 function TextEdit.new(maxLen, visible)
   return setmetatable({
     maxLen = maxLen,
@@ -60,14 +40,12 @@ function TextEdit.new(maxLen, visible)
   }, TextEdit)
 end
 
---- Enter edit mode with the cursor on the first char.
 function TextEdit:start()
   self.editing = true
   self.cur = 1
   self.long = nil
 end
 
---- The value padded with spaces up to the cursor.
 function TextEdit:_padded()
   local v = self.value
   while #v < self.cur - 1 do
@@ -76,13 +54,11 @@ function TextEdit:_padded()
   return v
 end
 
---- Replace the char under the cursor.
 function TextEdit:_setChar(c)
   local v = self:_padded()
   self.value = string.sub(v, 1, self.cur - 1) .. c .. string.sub(v, self.cur + 1)
 end
 
---- Swap the case of the char under the cursor.
 function TextEdit:_toggleCase()
   local c = self:_charAt(self.cur)
   if isUpper(c) then
@@ -110,13 +86,11 @@ function TextEdit:_commit()
   self.value = string.sub(v, 1, last)
 end
 
---- Handle one event while editing. Returns true when the edit committed
--- on this event, nil while it continues.
+--- true when the edit committed
 function TextEdit:handleEvent(event)
   local c = self:_charAt(self.cur)
 
-  -- ENTER still breaks after a long press, and Lua cannot killEvents() it,
-  -- so the long action runs on that break and swallows it
+  -- Long ENTER is followed by a break Lua cannot kill; act on the break
   local long = self.long
   if event == EVT_VIRTUAL_ENTER_LONG then
     self.long = true
@@ -159,9 +133,6 @@ function TextEdit:handleEvent(event)
   end
 end
 
---- Draw the value at (x, y). attr is the row's base attribute (INVERS on
--- the selected row); while editing, only the cursor cell is inverted,
--- like the firmware's edit rendering.
 function TextEdit:draw(x, y, attr)
   if not self.editing then
     local shown = self.value
@@ -174,7 +145,7 @@ function TextEdit:draw(x, y, attr)
     return
   end
 
-  -- Window the value so the cursor is always on screen
+  -- Keep the cursor on screen
   local first = 1
   if self.visible and self.cur > self.visible then
     first = self.cur - self.visible + 1

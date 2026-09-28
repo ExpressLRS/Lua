@@ -1,35 +1,19 @@
 ---------------------------------------------------------------------------
 -- VTX Administrator Widget - Core                                       --
--- Loaded via loadScript() from ELRSVTXAdmin/main.lua                    --
---                                                                       --
--- Home of the VTXAdmin component: client of the ELRS TX module's VTX    --
--- Administrator over the CRSF config protocol (PARAMETER_READ/WRITE).   --
--- Field IDs are discovered at runtime by name -- never hardcoded.       --
---                                                                       --
--- Wires the components around it -- ui/display.lua, ui/fullscreen.lua   --
--- and a screen-specific minimized layout from ui/ picked by LCD_W/LCD_H --
--- -- then runs the widget lifecycle. Loaded fresh per widget instance,  --
--- so every table here is per-instance state, except PresetsStorage:     --
--- main.lua hands every instance the same store, whose latch table is    --
--- how the 6POS automation consumes an edge exactly once per radio.      --
+-- Loaded via loadScript() from ELRSVTXAdmin/main.lua. State is per      --
+-- instance, except the shared PresetsStorage (its latch dedupes 6POS).  --
 ---------------------------------------------------------------------------
 
 local zone, options, crsf, CRSFSession, PresetsStorage = ...
 
 -- ============================================================================
--- VTXAdmin: client of the ELRS "VTX Administrator" service on the TX module
--- Discovery state machine, current/desired VTX state, write policy,
--- 6POS quick-change and push-trigger automation
+-- VTXAdmin: client of the module's VTX Administrator
 -- ============================================================================
 
--- Every widget instance owns a CRSF parameter session in passive fan-out
--- mode: any field from the TX module is accepted, so sibling instances see
--- every response they did not request themselves.
+-- Passive: also sees fields sibling instances requested
 local session
 
 local VTXAdmin = {
-  -- State machine phase constants. "phase" rather than "state": VTXAdmin.state
-  -- below is the VTX state parsed from the folder name.
   PHASE_INIT = 0,
   PHASE_NO_MODULE = 1,
   PHASE_DISCOVER_ROOT = 2,
@@ -38,19 +22,14 @@ local VTXAdmin = {
   PHASE_READY = 5,
   PHASE_SENDING = 6,
 
-  -- Current state machine phase
   phase = 0, -- PHASE_INIT
 
-  -- Previous tick timestamp, to detect suspension: a standalone tool pauses
-  -- widget scripts, and whatever it changed needs one read-back on resume.
+  -- Detects suspension by a standalone tool
   lastTick = 0,
 
-  -- 6POS debounce window. The processing state itself -- consumed position,
-  -- collection, push trigger level -- lives on PresetsStorage.latch, shared
-  -- across widget instances.
   DEBOUNCE = 20, -- 200ms in getTime() ticks (10ms each)
 
-  -- Field IDs (discovered at runtime)
+  -- Discovered by name at runtime
   ids = {
     folder = nil,
     band = nil,
@@ -60,16 +39,13 @@ local VTXAdmin = {
     send = nil,
   },
 
-  -- Band lookup tables. BAND_LETTERS is 1-based: band 0 has no letter, and its label
-  -- differs by context ("Off" for a disabled VTX, "--" for an unused 6POS preset slot).
+  -- Band 0 has no letter: "Off" for the VTX, "--" for an unused preset
   BAND_LETTERS = { "A", "B", "E", "F", "R", "L" },
   BAND_VALUES = { Off = 0, A = 1, B = 2, E = 3, F = 4, R = 5, L = 6 },
 
-  -- Status line shown by the UI until discovery finishes
   statusText = "Initializing...",
 
-  -- Current VTX state (parsed from folder name). Stable table identity:
-  -- mutated in place, never replaced -- UI closures capture a reference.
+  -- Mutated in place; UI closures hold references
   state = {
     band = 0, -- 0=Off, 1=A, 2=B, 3=E, 4=F, 5=R, 6=L
     bandLetter = "?",
@@ -79,8 +55,7 @@ local VTXAdmin = {
     pitmodeAux = nil, -- switch name when pit mode is bound to an aux switch
   },
 
-  -- Desired VTX state (edited by user in full-screen UI). Same stable
-  -- identity contract as state.
+  -- Edited in full screen; mutated in place
   desired = {
     band = 5, -- Raceband
     channel = 1,
@@ -89,12 +64,10 @@ local VTXAdmin = {
   },
 }
 
---- Parse "VTX Admin (R:4:2:P)" into VTXAdmin.state fields.
--- ExpressLRS writes "VTX Admin (BAND:CHANNEL[:POWER[:PITMODE]])": band Off drops the whole
--- suffix, power "-" drops both power and pit mode, pit mode Off drops itself. PITMODE is "P"
--- when set to On, or the aux label ("AUX1\192".."AUX10\193", \192/\193 = up/down arrow) when
--- bound to a switch. The name carries only the binding, never the switch position, so an aux
--- binding sets pitmodeAux and leaves pitmode false.
+--- Parse "VTX Admin (BAND:CHANNEL[:POWER[:PITMODE]])" into state.
+--- PITMODE is "P", or an aux label plus up/down arrow when switch-bound.
+--- Band Off drops the suffix, power "-" drops power and pit mode.
+--- Aux binding sets pitmodeAux only: the name never has the switch position.
 local function parseFolderName(name)
   local s = VTXAdmin.state
   local content = string.match(name, "%((.+)%)")
@@ -127,9 +100,7 @@ local function parseFolderName(name)
     s.pitmode = true
     s.pitmodeAux = nil
   else
-    -- Strip the trailing up/down arrow: the shared decoder translates the
-    -- firmware's one-byte arrows into the (multi-byte) CHAR_UP/CHAR_DOWN
-    -- glyphs before the name reaches us.
+    -- Strip the trailing arrow (multi-byte CHAR_UP/CHAR_DOWN)
     s.pitmode = false
     local part = parts[4]
     if CHAR_UP and string.sub(part, -#CHAR_UP) == CHAR_UP then
@@ -143,24 +114,19 @@ local function parseFolderName(name)
   return true
 end
 
---- True when the VTX is tuned to a band.
 function VTXAdmin.isTuned()
   return VTXAdmin.isActive() and VTXAdmin.state.band > 0
 end
 
---- True when the module is up but the VTX band is set to Off.
 function VTXAdmin.isDisabled()
   return VTXAdmin.isActive() and VTXAdmin.state.band == 0
 end
 
---- True when a power level is set. ExpressLRS omits power and pit mode from the VTX Admin
---- folder name when power is "-", and hides the Pitmode field entirely, so neither value is
---- meaningful until a power level is chosen.
+--- Power "-" drops power and pit mode from the folder name.
 function VTXAdmin.hasPower()
   return VTXAdmin.isTuned() and VTXAdmin.state.power > 0
 end
 
---- Sync desired values with current state (e.g. on discovery or entering full-screen).
 function VTXAdmin.syncDesiredFromState()
   local s = VTXAdmin.state
   local d = VTXAdmin.desired
@@ -186,9 +152,7 @@ function VTXAdmin.isActive()
   return VTXAdmin.phase == VTXAdmin.PHASE_READY or VTXAdmin.phase == VTXAdmin.PHASE_SENDING
 end
 
---- True when a CRSF module answered discovery. Weaker than isActive(): the 6POS preset
---- cheatsheet is local radio state read from presets.txt, not VTX telemetry, so it is worth
---- showing before discovery finishes.
+--- Presets are local, so they show before discovery finishes.
 function VTXAdmin.hasModule()
   return VTXAdmin.phase ~= VTXAdmin.PHASE_NO_MODULE
 end
@@ -203,7 +167,7 @@ local function onField(field)
 
   if VTXAdmin.phase == VTXAdmin.PHASE_DISCOVER_ROOT then
     if fieldId == 0 and field.type == crsf.CONST.FIELD_FOLDER then
-      -- The session auto-queues the root children off this entry
+      -- Session auto-queues the root children
       VTXAdmin.phase = VTXAdmin.PHASE_DISCOVER_CHILDREN
       VTXAdmin.statusText = "Discovering fields..."
     end
@@ -273,11 +237,7 @@ local function mapTo6Pos(value)
   return pos
 end
 
---- Runs every tick. Reads the 6POS source, debounces, and applies the matching
---- preset when the consumed (collection, position) pair changes. The state
---- lives on the shared latch so an edge produces one write per radio, not one
---- per instance: widget callbacks run sequentially in one Lua state, so the
---- first instance that can act consumes the edge and the rest see none.
+--- Shared latch: one write per edge per radio, not per instance.
 local function process6Pos()
   if not PresetsStorage.enabled then
     return
@@ -295,8 +255,7 @@ local function process6Pos()
   local pos = mapTo6Pos(value)
   local now = getTime()
 
-  -- Debounce: require stable position for DEBOUNCE ticks. Shared: the source
-  -- is radio state, so one debounce serves every instance.
+  -- Debounce; shared, as the source is radio state
   if pos ~= latch.stablePos then
     latch.stablePos = pos
     latch.stableTime = now
@@ -306,26 +265,20 @@ local function process6Pos()
     return
   end
 
-  -- Only consume a position once THIS instance can write. writeConfig() drops
-  -- everything outside the ready phase, and the latch is taken before it is
-  -- called, so latching any earlier discards the edge permanently -- for every
-  -- instance at once. Holding until ready is also what makes the first tick
-  -- after discovery assert the boot position to the module.
+  -- Latch only once writable, or the edge is lost for every instance.
+  -- This also applies the boot position on the first ready tick.
   if not VTXAdmin.isReady() then
     return
   end
 
-  -- Edge-triggered: send when either half of the (collection, position) pair
-  -- the module is holding changes. Picking a different collection retunes the
-  -- VTX without touching the switch.
+  -- A collection change also retunes
   if pos == latch.lastPos and PresetsStorage.collection == latch.lastCollection then
     return
   end
   latch.lastPos = pos
   latch.lastCollection = PresetsStorage.collection
 
-  -- An unused slot leaves the VTX untouched rather than turning it off. The
-  -- latch is already taken, so this is deliberate: the skip does not retry.
+  -- Unused slot: leave the VTX alone, no retry
   local preset = PresetsStorage.items[pos]
   if not preset or preset.band == 0 then
     return
@@ -337,10 +290,7 @@ local function process6Pos()
   end
 end
 
---- Runs every tick. Edge-detects the pushSource going high and triggers
---- pushToVtx() to send the current config to the VTX. The state lives on the
---- shared latch so a rising edge fires one push per radio, not one per
---- instance.
+--- Rising edge on pushSource sends config; one push per radio.
 local function processPushTrigger()
   if PresetsStorage.autoPushVtx then
     return
@@ -357,19 +307,14 @@ local function processPushTrigger()
   local latch = PresetsStorage.latch
   local high = val > 0
 
-  -- The level latch is only meaningful for the source it was sampled from: a
-  -- reassignment adopts the new source's level without firing. A source that
-  -- is already high was not just moved there by the user. This also seeds the
-  -- latch on the first sample after boot.
+  -- New source: adopt its level without firing (also seeds at boot)
   if PresetsStorage.pushSource ~= latch.pushSourceSeen then
     latch.pushSourceSeen = PresetsStorage.pushSource
     latch.pushLastHigh = high
     return
   end
 
-  -- Only consume once THIS instance can send (the same gate pushToVtx
-  -- applies): latching earlier would eat the rising edge for every instance
-  -- while nobody could act on it.
+  -- Latch only once sendable, or the edge is lost
   if not VTXAdmin.isReady() and not VTXAdmin.isSending() then
     return
   end
@@ -377,7 +322,6 @@ local function processPushTrigger()
   local wasHigh = latch.pushLastHigh
   latch.pushLastHigh = high
 
-  -- Edge detection: trigger only on rising edge (low -> high)
   if high and not wasHigh then
     VTXAdmin.pushToVtx()
   end
@@ -390,12 +334,8 @@ end
 function VTXAdmin.tick()
   local now = getTime()
 
-  -- A tick gap over a second means the widget was suspended — a standalone
-  -- tool had the screen and may have changed the module config — so read the
-  -- folder back once on resume. The bounded refresh slot retries a lost
-  -- frame without ever polling: every push replaces one RC-channels frame
-  -- on the handset->module UART, so the folder is only read when something
-  -- can have changed it.
+  -- Resumed after >1 s: a tool may have changed config, so read back once.
+  -- Never poll: each read replaces an RC frame.
   if VTXAdmin.lastTick > 0 and now - VTXAdmin.lastTick > 100 and VTXAdmin.phase == VTXAdmin.PHASE_READY then
     session:refreshField(VTXAdmin.ids.folder, 0, 3)
   end
@@ -413,15 +353,13 @@ function VTXAdmin.tick()
   elseif VTXAdmin.phase == VTXAdmin.PHASE_SENDING and not session:isWriting() then
     print("VTXAdmin: write queue drained")
     VTXAdmin.phase = VTXAdmin.PHASE_READY
-    -- Read the folder back ~100ms after the last write so the module has
-    -- applied the change; the simulator defers folder-name updates ~20ms.
+    -- ~100 ms for the module to apply the change
     session:refreshField(VTXAdmin.ids.folder, 10, 3)
   end
 
   session:tick()
 
-  -- After the session pump, matching the write-queue timing the automation
-  -- had as separate background() calls: writes it queues go out next tick.
+  -- After the pump, so queued writes go out next tick
   process6Pos()
   processPushTrigger()
 end
@@ -430,8 +368,7 @@ end
 -- VTXAdmin: write queue builder
 -- ============================================================================
 
---- Write changed config fields (band, channel, power, pitmode) to the ELRS module.
---- Does NOT send the "Send VTx" command — call pushToVtx() separately for that.
+--- Write changed fields; pushToVtx() sends them to the VTX.
 function VTXAdmin.writeConfig()
   if not VTXAdmin.isReady() then
     print("VTXAdmin: writeConfig() skipped - not ready")
@@ -490,10 +427,7 @@ function VTXAdmin.writeConfig()
   end
 end
 
---- Write a preset's band and channel on top of the module's current state.
---- Re-basing on state means a preset only ever writes band and channel:
---- desired can hold stale power/pitmode -- ExpressLRS omits both from the
---- folder name when power is "-", and nothing re-syncs after a send completes.
+--- Re-sync first: desired may hold stale power/pitmode.
 function VTXAdmin.applyPreset(band, channel)
   VTXAdmin.syncDesiredFromState()
   VTXAdmin.desired.band = band
@@ -501,7 +435,6 @@ function VTXAdmin.applyPreset(band, channel)
   VTXAdmin.writeConfig()
 end
 
---- Send the "Send VTx" command, pushing config to the VTX.
 function VTXAdmin.pushToVtx()
   if not VTXAdmin.isReady() and VTXAdmin.phase ~= VTXAdmin.PHASE_SENDING then
     print("VTXAdmin: pushToVtx() skipped - not ready")
@@ -523,7 +456,6 @@ local VTXDisplay, WidgetLayout = loadScript("/WIDGETS/ELRSVTXAdmin/ui/display.lu
 -- Screen detection and UI loading
 -- ============================================================================
 
---- Detect screen resolution and return an ID for the per-screen UI file.
 local function getScreenId()
   local w, h = LCD_W, LCD_H
   if w >= 800 then
@@ -539,7 +471,7 @@ local function getScreenId()
   end
 end
 
---- Convert Transparency option (0-5) to LVGL opacity (255-0).
+--- Transparency option 0-5 -> opacity 255-0
 local function bgOpacity(opts)
   local t = (opts and opts.Transparency) or 2
   return math.max(0, 255 - 51 * t)
@@ -574,16 +506,7 @@ end
 
 local FullScreenUI
 
---- Build the full-screen page, loading it the first time it is asked for.
---- Only one widget can be full screen at a time, so loading it eagerly would
---- leave a page builder resident in every instance that never shows one --
---- and this widget is the one users place many of. update() is not a hot
---- path, so a loadScript here costs nothing.
----
---- The page is built once, on entry. Everything it shows updates in place from
---- there: every value is a per-frame callback or a control that polls its
---- get() -- see the ui/fullscreen.lua header for the constraint that keeps
---- that true.
+--- Loaded on first use: only one widget is full screen at a time.
 local function buildFullScreen()
   if not FullScreenUI then
     FullScreenUI = loadScript("/WIDGETS/ELRSVTXAdmin/ui/fullscreen.lua")(VTXAdmin, PresetsStorage)
@@ -603,7 +526,6 @@ function wgt.update(newOptions)
   end
 end
 
--- Initial build
 WidgetUI.build(wgt.zone, wgt.options)
 
 return wgt

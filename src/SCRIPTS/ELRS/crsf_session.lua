@@ -1,24 +1,8 @@
 ---------------------------------------------------------------------------
 -- CRSF Parameter Session                                                --
---                                                                       --
--- A stateful CRSF parameter client: owns the field store, the load      --
--- queue and its retry scheduler, the write queue and its pacing, the    --
--- command state machine, and optionally device discovery, link status   --
--- and ELRS 1.x detection. Mechanism lives here; policy -- what to load, --
--- when to write, how to render -- stays with the caller, which reacts   --
--- through the store queries and the onFieldUpdate / onDeviceUpdate      --
--- callbacks.                                                            --
---                                                                       --
--- Multiple instances are real: the config tool and every VTX Admin      --
--- widget instance each own one. Methods live on the shared metatable,   --
--- so an instance costs one table plus its opts callbacks.               --
---                                                                       --
--- Frames arrive through drain(): every consumer pops its own script     --
--- instance's queue (the firmware replicates incoming frames per widget  --
--- instance on color radios) and _onFrame routes them internally.        --
---                                                                       --
+-- Field store, load/write queues and command state for one device.      --
+-- One instance per consumer (config tool, each VTX Admin widget).       --
 -- Loaded via loadScript("/SCRIPTS/ELRS/crsf_session.lua")(crsf,params). --
--- Returns the CRSFSession class; construct with CRSFSession.new(opts).  --
 ---------------------------------------------------------------------------
 
 local crsf, params = ...
@@ -33,28 +17,14 @@ local CANCEL_GRACE = 200 -- wait for CMD_IDLE after a requested cancel (2 s)
 local CRSFSession = {}
 CRSFSession.__index = CRSFSession
 
---- Create a session.
--- @param opts  table with:
---   deviceId          target device address (default ADDRESS_TX)
---   handsetId         reply-to address (default ADDRESS_HANDSET)
---   responseTimeout   fixed read-retry deadline in ticks; when omitted it is
---                     derived per device: 50 for the local ELRS TX, 500 for
---                     remote devices relayed over the air link
---   acceptUnsolicited true accepts any field from deviceId (passive fan-out:
---                     sibling instances see every response); default strict,
---                     accepting only the answer the session is waiting for
---   discovery         maintain .devices from DEVICE_INFO + ping cadence
---   trackStatus       keep .status current from ELRS_STATUS (1 Hz cadence)
---   detectV1          watch inbound PARAMETER_WRITE for the ELRS 1.x
---                     signature, latching .v1Detected
---   preload           once the root load completes, queue every unloaded
---                     subfolder child for background loading
---   onFieldUpdate     function(field) called after each decoded entry
---   onDeviceUpdate    function(device, isNew) called after each DEVICE_INFO
+--- opts: deviceId, handsetId, responseTimeout (ticks; 50 local TX, 500
+--- remote), acceptUnsolicited (any field; default only the awaited one),
+--- discovery (fills .devices), trackStatus (.status at 1 Hz), detectV1
+--- (latches .v1Detected), preload (queue subfolders after root load),
+--- onFieldUpdate(field), onDeviceUpdate(device, isNew)
 function CRSFSession.new(opts)
   opts = opts or {}
   return setmetatable({
-    -- Public facts
     deviceId = opts.deviceId or crsf.CONST.ADDRESS_TX,
     handsetId = opts.handsetId or crsf.CONST.ADDRESS_HANDSET,
     deviceName = nil,
@@ -62,16 +32,12 @@ function CRSFSession.new(opts)
     fieldsCount = 0,
     devices = {},
     command = nil, -- the command field driving the active popup
-    commandAt = 0, -- tick of the click that started it (UI grace timers)
-    -- Link status; table identity is stable, only keys change
-    status = { flags = 0, warning = "" },
-    -- Read-and-clear flags for the app
+    commandAt = 0, -- click tick; UIs time grace periods from it
+    status = { flags = 0, warning = "" }, -- identity stable; safe to cache
     fieldHiddenChanged = nil,
     v1Detected = nil,
-    -- Reassembly state (crsf_params.lua manages it; rx.chunk is readable)
     rx = { chunk = 0, expect = -1 },
 
-    -- Options
     _acceptUnsolicited = opts.acceptUnsolicited,
     _discovery = opts.discovery,
     _trackStatus = opts.trackStatus,
@@ -81,26 +47,20 @@ function CRSFSession.new(opts)
     _onFieldUpdate = opts.onFieldUpdate,
     _onDeviceUpdate = opts.onDeviceUpdate,
 
-    -- Field store: id -> field table, get-or-create on first entry so a
-    -- field's table identity is stable across reloads (UI closures hold it)
-    _fields = {},
+    _fields = {}, -- get-or-create: UI closures hold field tables
 
-    -- Load queue (LIFO) and the five scheduler deadlines
-    _loadQueue = {},
+    _loadQueue = {}, -- LIFO
     _nextReadAt = 0,
     _nextQueryAt = 0,
     _nextStatusAt = 0,
     _nextPingAt = 0,
     _lastWriteAt = 0,
-    -- Command step the radio's single output slot refused; tick() retries it
     _pendingFrame = nil,
 
-    -- Write queue: encoded frames between head and tail, paced by tick()
     _writeQueue = {},
     _writeHead = 1,
     _writeTail = 0,
 
-    -- Bounded best-effort refresh slot (refreshField)
     _refreshId = nil,
     _refreshAt = 0,
     _refreshLeft = 0,
@@ -112,9 +72,7 @@ function CRSFSession.new(opts)
   }, CRSFSession)
 end
 
--- Response deadline for a PARAMETER_READ retry and for the first re-query of
--- a command step: a fixed opts.responseTimeout wins, otherwise 0.5 s for the
--- local TX module, 5 s for remote devices relayed over the air link.
+-- Remote devices answer over the air link: 5 s vs 0.5 s locally
 function CRSFSession:_responseTimeout()
   if self._respTimeout then
     return self._respTimeout
@@ -126,8 +84,7 @@ end
 -- Lifecycle
 -- ============================================================================
 
---- Point the session at a device (a .devices entry) and reload its fields.
--- @return true when the device changed, false when nothing needed doing
+--- Returns true when the device changed.
 function CRSFSession:setDevice(device)
   if not device then
     return false
@@ -150,18 +107,10 @@ function CRSFSession:setDevice(device)
   return true
 end
 
---- Drain the destructive pop queue into the session: the one receive path
--- for every consumer. The queue popped is the calling script instance's
--- own, so a session drains exactly the frames delivered to its owner.
 function CRSFSession:drain()
   crsf.drain(self, self._onFrame)
 end
 
---- Ask every reachable device to announce itself (broadcast DEVICE_PING).
--- Answers land in .devices through the discovery routing, so this is the
--- policy-facing "refresh the device list now" -- the scheduler's own
--- cadence only pings while the list is still empty. Meaningful only with
--- opts.discovery.
 function CRSFSession:discoverDevices()
   crsf:pingDevices()
 end
@@ -213,8 +162,7 @@ function CRSFSession:_onStatus(data)
     return
   end
   if status.id ~= self.deviceId then
-    -- A foreign device's status while we buffer chunks means our entry
-    -- stream was interrupted: abandon it
+    -- Another device's status interrupts our chunk stream
     params.resetChunks(self.rx)
     return
   end
@@ -247,10 +195,7 @@ function CRSFSession:_onEntry(data)
   end
   local now = getTime()
   if not buffer then
-    -- Chunk consumed: hurry the follow-up request, which carries the updated
-    -- chunk index. The device serves the rest of a command answer only on
-    -- our CMD_QUERY, so the active command comes first. A refresh slot
-    -- answering mid-entry burns no attempt.
+    -- Request the next chunk now; commands continue only on CMD_QUERY
     if self.command and self.command.id == fieldId then
       self._nextQueryAt = 0
     elseif self._loadQueue[#self._loadQueue] == fieldId then
@@ -262,9 +207,7 @@ function CRSFSession:_onEntry(data)
     return
   end
 
-  -- Entry complete: it settles the queue head only when it answers it -- a
-  -- command status elicited while loads are pending must not pop an
-  -- unrelated field
+  -- Pop only if this answers the head; command answers arrive mid-load
   local answeredHead = self._loadQueue[#self._loadQueue] == fieldId
   if answeredHead then
     self._loadQueue[#self._loadQueue] = nil
@@ -279,16 +222,9 @@ function CRSFSession:_onEntry(data)
     self._fields[fieldId] = field
   end
 
-  -- Hidden-bit changes rebuild the UI's cached list of visible fields, so
-  -- track it across the decode.
   local wasHidden = field.hidden
-  -- Passing the old name makes the decoder skip its read and reuse that
-  -- string. In strict mode any name change is flagged first
-  -- (nameStale/reloading). A passive fan-out session also decodes entries
-  -- it never asked for, so no flag can cover a change -- but only folder
-  -- names embed values (ExpressLRS rewrites them on writes); every other
-  -- name is static, and caching it keeps the fan-out path cheap enough for
-  -- many sessions sharing one bus.
+  -- Strict: reuse the name unless flagged stale. Passive: only folder
+  -- names embed values
   local cachedName
   if not self._acceptUnsolicited then
     cachedName = (not field.nameStale and not field.reloading) and field.name or nil
@@ -303,20 +239,14 @@ function CRSFSession:_onEntry(data)
     end
 
     if field.type == crsf.CONST.FIELD_COMMAND and field.status == crsf.CONST.CMD_IDLE and self.command == field then
-      -- The active command just finished (or was cancelled): re-read its
-      -- same-level fields so the current page reflects any values the
-      -- command changed, and dismiss the popup. The guard limits both to
-      -- the active command -- routine loads of idle command fields while
-      -- browsing must not trigger either.
+      -- Command finished: re-read what it may have changed. Only the active
+      -- command; idle command fields also load while browsing
       self:_reloadRelated(field)
       self.command = nil
       self._pendingFrame = nil
     end
 
-    -- Auto-queue children for the root folder and during preloading -- but
-    -- only off the answer to our own read: under the fan-out, sessions also
-    -- see every sibling's root answers, and re-queueing the children each
-    -- time would multiply the load traffic by the instance count
+    -- Only off our own read; siblings see every root answer
     if
       answeredHead
       and field.type == crsf.CONST.FIELD_FOLDER
@@ -333,8 +263,6 @@ function CRSFSession:_onEntry(data)
     end
   end
 
-  -- A completed command answer restarts the keep-alive cadence (and clears
-  -- the hurry one of its chunks left behind)
   if self.command then
     self._nextQueryAt = now + (self.command.timeout or 100)
   end
@@ -350,7 +278,6 @@ end
 -- Store queries
 -- ============================================================================
 
---- The device table for an address, or nil (opts.discovery fills .devices).
 function CRSFSession:getDevice(id)
   for _, device in ipairs(self.devices) do
     if device.id == id then
@@ -359,7 +286,7 @@ function CRSFSession:getDevice(id)
   end
 end
 
---- Loaded children of a folder, in wire order. folderId nil means root.
+--- folderId nil means root.
 function CRSFSession:fieldsInFolder(folderId)
   local folder = self._fields[folderId or 0]
   if not folder or not folder.children then
@@ -375,7 +302,6 @@ function CRSFSession:fieldsInFolder(folderId)
   return result
 end
 
---- True when every child of a folder is loaded. folderId nil means root.
 function CRSFSession:isFolderLoaded(folderId)
   local folder = self._fields[folderId or 0]
   if not folder or not folder.children then
@@ -390,8 +316,7 @@ function CRSFSession:isFolderLoaded(folderId)
   return true
 end
 
---- Load progress for a folder's children as (loaded, total), or nil while
--- the folder or its children list is unknown. folderId nil means root.
+--- Returns loaded, total; nil while the children are unknown.
 function CRSFSession:folderLoadProgress(folderId)
   local folder = self._fields[folderId or 0]
   if not folder or not folder.children then
@@ -408,17 +333,14 @@ function CRSFSession:folderLoadProgress(folderId)
   return loaded, total
 end
 
---- True while reads are queued.
 function CRSFSession:isLoading()
   return self._loadQueue[1] ~= nil
 end
 
---- True while a multi-chunk entry is mid-reassembly.
 function CRSFSession:isReceivingChunks()
   return self.rx.chunk > 0
 end
 
---- True while writes are waiting in the paced write queue.
 function CRSFSession:isWriting()
   return self._writeHead <= self._writeTail
 end
@@ -427,9 +349,6 @@ end
 -- Loading
 -- ============================================================================
 
---- Forget every field and reload from the root folder. Its response carries
--- the child ids, which auto-queue; subfolder children load on demand via
--- loadFolder() or in the background via opts.preload.
 function CRSFSession:reloadAll()
   self._fields = {}
   self._loadQueue = { 0 }
@@ -439,14 +358,12 @@ function CRSFSession:reloadAll()
   params.resetChunks(self.rx)
 end
 
---- Re-read one field now.
 function CRSFSession:reloadField(field)
   self._nextReadAt = 0
   params.resetChunks(self.rx)
   self._loadQueue[#self._loadQueue + 1] = field.id
 end
 
---- Queue a folder's unloaded children.
 function CRSFSession:loadFolder(folderId)
   local folder = self._fields[folderId]
   if not folder or not folder.children then
@@ -464,7 +381,6 @@ function CRSFSession:loadFolder(folderId)
   end
 end
 
---- Queue every unloaded subfolder child for background loading.
 function CRSFSession:preloadAll()
   self._preloading = true
   for id = 1, self.fieldsCount do
@@ -484,27 +400,20 @@ function CRSFSession:preloadAll()
   end
 end
 
---- Arm the bounded best-effort refresh slot: read fieldId `delay` ticks from
--- now, retrying at most `attempts` times if unanswered. Event-driven, never
--- periodic -- use it when something else can have changed the device (our
--- own writes, resume from suspension), not as a poll.
+--- One-off re-read after delay ticks, attempts default 3; not for polling.
 function CRSFSession:refreshField(fieldId, delay, attempts)
   self._refreshId = fieldId
   self._refreshAt = getTime() + (delay or 0)
   self._refreshAttempts = attempts or 3
   self._refreshLeft = self._refreshAttempts
-  -- A fresh read must not inherit chunk state from an interrupted one
-  params.resetChunks(self.rx)
+  params.resetChunks(self.rx) -- don't inherit an interrupted read's chunks
 end
 
 -- ============================================================================
 -- Writing
 -- ============================================================================
 
--- Re-read what a value change can have altered: the parent folder (its name
--- may embed values) and every non-folder sibling, commands included (CRSF
--- parameters on one level are routinely interdependent -- option lists
--- shrink, fields and commands hide).
+-- Parent name may embed values; siblings can hide or change options
 function CRSFSession:_reloadRelated(field)
   if field.parent and self._fields[field.parent] then
     self._fields[field.parent].nameStale = true
@@ -533,9 +442,6 @@ function CRSFSession:_reloadRelated(field)
   self:_afterWrite()
 end
 
--- Post-write settle: give the device WRITE_SETTLE to apply the change
--- before the re-reads go out, and keep the next link-status request from
--- landing inside that window.
 function CRSFSession:_afterWrite()
   local now = getTime()
   self._nextReadAt = now + WRITE_SETTLE
@@ -545,11 +451,8 @@ function CRSFSession:_afterWrite()
   end
 end
 
---- Write a field's current value to the device: encodes by field type,
--- sends immediately when the wire is idle (every push replaces one
--- RC-channels frame, so bursts are paced by tick()). In strict mode the
--- write also re-reads its related fields; a passive fan-out session owns
--- its read-back policy (refreshField).
+--- Each push replaces an RC-channels frame, so writes are paced.
+--- Strict sessions re-read related fields; passive ones must refreshField().
 function CRSFSession:writeField(field)
   local frameType, payload
   if field.type == crsf.CONST.FIELD_STRING then
@@ -576,38 +479,28 @@ end
 -- Commands
 -- ============================================================================
 
--- Push one command step. The radio has a single outbound slot for Lua
--- frames, freed once per module period, so a push right after tick()'s own
--- frame is refused: park the payload and let tick() retry it next cycle. A
--- newer step replaces a still-parked one (a cancel over an unsent click).
+-- The radio's one Lua outbound slot may be busy; tick() retries
 function CRSFSession:_sendStep(fieldId, step)
   local frameType, payload = params.encodeCommandStep(self.deviceId, self.handsetId, fieldId, step)
   if crsf.push(frameType, payload) then
     self._pendingFrame = nil
     self:_onStepSent(step)
   else
-    self._pendingFrame = payload
+    self._pendingFrame = payload -- a newer step (e.g. cancel) replaces an unsent one
   end
 end
 
--- Chunk bookkeeping once a step is on the wire. CLICK/CONFIRMED/CANCEL make
--- the device answer from chunk 0 (sendCommandResponse resets its
--- nextStatusChunk), and so does a QUERY at rest, which must also clear
--- rx.done: a one-chunk CMD_IDLE after a two-chunk CMD_EXECUTING would
--- otherwise be swallowed as a trailing duplicate. A QUERY mid-entry fetches
--- the next chunk and keeps the buffer.
+-- Device restarts its answer at chunk 0 unless we are mid-entry. The reset
+-- also clears rx.done, or a 1-chunk CMD_IDLE after a 2-chunk EXECUTING is
+-- dropped as a duplicate
 function CRSFSession:_onStepSent(step)
   if step ~= crsf.CONST.CMD_QUERY or self.rx.chunk == 0 then
     params.resetChunks(self.rx)
   end
 end
 
---- Click a command field. session.command holds the field until the device
--- reports CMD_IDLE (or the command is cancelled); the UI renders its popup
--- from session.command.status/info, and session.commandAt dates the click.
--- The live popup is the re-entrancy guard -- the field's own status is not
--- consulted, as a cancel leaves it wherever the dialog last saw it.
 function CRSFSession:execCommand(field)
+  -- self.command is the guard; field.status is stale after a cancel
   if self.command or field.status == nil then
     return
   end
@@ -615,12 +508,10 @@ function CRSFSession:execCommand(field)
   self.command = field
   self.commandAt = getTime()
   self:_sendStep(field.id, crsf.CONST.CMD_CLICK)
-  -- A lost answer is re-queried soon (never re-clicked: that would run Bind
-  -- or Send VTx twice); the field's own timeout takes over once one arrived
+  -- Re-query, never re-click: that would run Bind twice
   self._nextQueryAt = self.commandAt + self:_responseTimeout()
 end
 
---- Answer the device's CMD_ASKCONFIRM.
 function CRSFSession:confirmCommand()
   if self.command then
     self.command.status = crsf.CONST.CMD_CONFIRMED
@@ -629,7 +520,6 @@ function CRSFSession:confirmCommand()
   end
 end
 
---- Cancel and dismiss: sends CMD_CANCEL and drops the popup immediately.
 function CRSFSession:cancelCommand()
   if self.command then
     self:_sendStep(self.command.id, crsf.CONST.CMD_CANCEL)
@@ -637,10 +527,7 @@ function CRSFSession:cancelCommand()
   end
 end
 
---- Cancel but keep the popup: sends CMD_CANCEL and waits CANCEL_GRACE for
--- the device to report CMD_IDLE, which dismisses the popup through the
--- entry decode. Used while no dialog is on screen yet (e.g. right after
--- CMD_CLICK), so the UI keeps tracking the device's actual command state.
+--- Keeps the popup until the device reports CMD_IDLE.
 function CRSFSession:requestCancelCommand()
   if self.command then
     self:_sendStep(self.command.id, crsf.CONST.CMD_CANCEL)
@@ -652,8 +539,6 @@ end
 -- Status
 -- ============================================================================
 
---- Clear the ELRS critical-error banner: optimistic local clear plus the
--- suppress write the module acts on.
 function CRSFSession:suppressCriticalErrors()
   self.status.flags = 0
   crsf.push(params.encodeSuppressCriticalErrors(self.deviceId, self.handsetId))
@@ -663,32 +548,25 @@ end
 -- Scheduler
 -- ============================================================================
 
---- Send what is due. At most one parameter frame per call, strict priority:
--- parked command step > command keep-alive > write drain > link-status >
--- reads (refresh slot, then load-queue head). While a command runs it owns
--- the wire -- reads starve by design, and the field data rides its CMD_QUERY
--- answers. Discovery pings sit outside that chain: they cost no parameter
--- traffic.
+--- At most one frame per call: parked step > command > writes > status >
+--- reads.
 function CRSFSession:tick()
   local now = getTime()
 
   if self._discovery then
-    -- Ping on telemetry transition (the answering device may have changed)
+    -- Device may have changed
     local connected = self.status.connected
     if connected and not self._hadTelemetry then
       crsf:pingDevices()
     end
     self._hadTelemetry = connected
-    -- Periodic ping for initial device discovery
     if #self.devices == 0 and now > self._nextPingAt then
       crsf:pingDevices()
       self._nextPingAt = now + PING_PERIOD
     end
   end
 
-  -- A step the radio refused last cycle goes first, live command or not: a
-  -- cancel must reach the device either way. The slot was busy, so nothing
-  -- else could have gone out this cycle anyway.
+  -- Even with no live command: a cancel must still go out
   if self._pendingFrame then
     if crsf.push(crsf.CONST.FRAMETYPE_PARAMETER_WRITE, self._pendingFrame) then
       local step = self._pendingFrame[4]
@@ -703,7 +581,7 @@ function CRSFSession:tick()
       self:_sendStep(self.command.id, crsf.CONST.CMD_QUERY)
       self._nextQueryAt = now + (self.command.timeout or 100)
     end
-    return
+    return -- reads starve while a command runs, by design
   end
 
   if self._writeHead <= self._writeTail then
@@ -723,8 +601,7 @@ function CRSFSession:tick()
 
   if self._trackStatus and now > self._nextStatusAt then
     if self.isElrsTx then
-      -- isElrsTx guarantees deviceId is ADDRESS_TX here (see setDevice),
-      -- the addressing requestElrsStatus() hardcodes.
+      -- Hardcodes ADDRESS_TX, which isElrsTx implies
       crsf:requestElrsStatus()
     else
       self.status.receivedPackets = nil
@@ -756,9 +633,5 @@ function CRSFSession:tick()
     end
   end
 end
-
--- ============================================================================
--- Return class
--- ============================================================================
 
 return CRSFSession

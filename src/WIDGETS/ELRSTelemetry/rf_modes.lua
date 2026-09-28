@@ -3,28 +3,18 @@
 -- Loaded via loadScript() from ELRSTelemetry/telemetry.lua with no      --
 -- arguments; returns the RfModes table.                                 --
 --                                                                       --
--- Pure data plus its selector: the packet-rate names ExpressLRS reports  --
--- through the RFMD sensor, and the receiver sensitivity floor each rate  --
--- is rated to. Both are keyed by the module's firmware major version and --
--- change on ExpressLRS's release clock, which is why they live apart     --
--- from the polling policy that consumes them.                           --
---                                                                       --
--- RFMD is a 0-based sensor and these are 1-based Lua arrays, so the +1   --
--- lives here, next to the literals that define the convention. Callers   --
--- pass the raw sensor value.                                            --
+-- Packet-rate names and sensitivity floors per ELRS major version.      --
+-- RFMD is 0-based; callers pass the raw sensor value.                   --
 ---------------------------------------------------------------------------
 
 local RfModes = {}
 
--- Names and floors for the currently selected major version, or nil while no
--- ELRS module has answered a device ping.
+-- nil until a module answers a device ping
 ---@type table?
 RfModes._names = nil
 ---@type table?
 RfModes._floors = nil
 
--- Effective major version of the tables currently built. The only version
--- datum kept, purely so select() can skip rebuilds.
 ---@type number?
 RfModes._maj = nil
 
@@ -32,11 +22,7 @@ RfModes._maj = nil
 -- Selection
 -- ============================================================================
 
---- Install the lookup tables for an ELRS major version.
--- The highest known version at or below vMaj wins, so newer firmware
--- degrades to the newest known tables instead of losing its rate names.
--- Rebuilt only when the effective version changes (first answer, module
--- swap across reconnects), never per frame.
+-- Newer firmware falls back to the newest known table
 function RfModes.select(vMaj)
   local effMaj
   if vMaj >= 4 then
@@ -173,34 +159,24 @@ end
 -- Lookup
 -- ============================================================================
 
---- Packet-rate name for an RFMD sensor value.
--- Falls back to "RFMD<n>" for a rate this firmware version's table does not
--- name, and for every rate while no module has answered yet.
 function RfModes.name(rfmd)
   local names = RfModes._names
   return (names and names[rfmd + 1]) or table.concat({ "RFMD", tostring(rfmd) })
 end
 
---- Rated receiver sensitivity in dBm for an RFMD sensor value, or nil when
---- the rate is unknown. Rates the tables carry as 0 are unrated, not 0 dBm.
 function RfModes.floor(rfmd)
   local floors = RfModes._floors
   local dbm = floors and floors[rfmd + 1]
-  -- 0 is the tables' placeholder for a rate ExpressLRS publishes no figure
-  -- for. It has to become nil here: 0 is a truthy number, so callers guarding
-  -- with `or <default>` would take it for a real sensitivity of 0 dBm.
+  -- 0 = unrated; nil so callers' "or" defaults apply
   if dbm == 0 then
     return nil
   end
   return dbm
 end
 
--- The FLRC rates. The radio reports no SNR for FLRC packets, so RSNR sits at
--- 0 for as long as one of these runs. Keyed by name: both majors spell them
--- the same, and the name is what a reader can check against the RF Mode row.
+-- FLRC rates report no SNR
 local NO_SNR = { D250 = true, D500 = true, F500 = true, F1000 = true }
 
---- Whether an RFMD sensor value names a rate that carries an SNR reading.
 function RfModes.hasSnr(rfmd)
   local names = RfModes._names
   local name = names and names[rfmd + 1]

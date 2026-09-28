@@ -1,10 +1,6 @@
 ---------------------------------------------------------------------------
 -- VTX Administrator Widget                                              --
--- Displays VTX status (minimized) and allows full VTX configuration     --
--- (full-screen) via the CRSF config protocol to the ELRS TX module.     --
---                                                                       --
--- Uses the loadable.lua pattern to minimize memory when not in use.     --
--- Requires /SCRIPTS/ELRS on the SD card for shared CRSF protocol.       --
+-- Requires /SCRIPTS/ELRS on the SD card.                                --
 ---------------------------------------------------------------------------
 
 local name = "ELRSVTXAdmin"

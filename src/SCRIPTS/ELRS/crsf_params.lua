@@ -1,21 +1,11 @@
 ---------------------------------------------------------------------------
 -- CRSF Parameter Codec                                                  --
 --                                                                       --
--- Pure codecs for CRSF parameter traffic: byte getters, the per-type    --
--- PARAMETER_SETTINGS_ENTRY (0x2B) payload decoders, chunk reassembly    --
--- over a caller-owned rx-state table, and frame encoders that return    --
--- (frameType, payload) for the caller to push. Opt-in: only consumers   --
--- that read or write parameter fields load it, so telemetry-only        --
--- widgets never pay for it. Policy -- load queues, command popups,      --
--- reload decisions, transport -- stays with the caller.                 --
---                                                                       --
--- Purity rule: nothing in this file mutates a frame data table. The     --
--- single-frame fast path in reassemble() hands the caller's frame back  --
--- as the decode buffer, and decodeEntry may scan it more than once      --
--- (cached-name skip), so decoding must stay read-only.                  --
+-- PARAMETER_SETTINGS_ENTRY (0x2B) decoding, chunk reassembly and        --
+-- parameter frame encoders. Never mutates frame data: reassemble() may  --
+-- hand the caller's frame back as the decode buffer.                    --
 --                                                                       --
 -- Loaded via loadScript("/SCRIPTS/ELRS/crsf_params.lua")(crsf).         --
--- Returns the codec table directly.                                     --
 ---------------------------------------------------------------------------
 
 local crsf = ...
@@ -41,10 +31,7 @@ function Params.readValue(data, offset, size)
   return result
 end
 
---- Read a null-terminated string from a byte array without mutating it.
--- Names, units and info strings never carry the legacy ELRS arrow bytes
--- (the firmware emits them only inside selection options), so no glyph
--- translation happens here.
+--- Read a null-terminated string. Arrow bytes only occur in options.
 -- @param data    array of byte values
 -- @param offset  1-based start offset
 -- @param last    cached previous result: when given, decoding is skipped and
@@ -71,12 +58,9 @@ function Params.readString(data, offset, last)
   return shim.tableConcat(parts), offset + 1
 end
 
---- Read a null-terminated, semicolon-separated option list into the
--- caller-owned values table, refilling it in place so its identity is
--- stable for the field's lifetime. Empty options stay as "" entries (the
--- UI disables those slots); leftover slots from a previously longer list
--- are truncated. Translates the legacy ELRS arrow bytes (0xC0/0xC1) to the
--- EdgeTX CHAR_UP/CHAR_DOWN glyphs.
+--- Refill values in place from a ';'-separated option list. Empty options
+-- stay as "" (disabled slots). Maps legacy arrow bytes 0xC0/0xC1 to
+-- CHAR_UP/CHAR_DOWN.
 -- @param data    array of byte values
 -- @param offset  1-based start offset
 -- @param values  the caller-owned option table to refill
@@ -167,7 +151,6 @@ end
 local function fieldTextSelLoad(field, data, offset)
   local cached = field.dirty == nil and field.values or nil
   if cached then
-    -- Options already decoded and not flagged dirty: skip the blob
     cached, offset = Params.readString(data, offset, cached)
   else
     local values = field.values
@@ -179,9 +162,7 @@ local function fieldTextSelLoad(field, data, offset)
     offset, vcnt, changed = Params.readOptions(data, offset, values)
     field.disabled = (vcnt <= 1) or nil
     if changed then
-      -- Consumers watch this revision instead of table identity: the values
-      -- table is refilled in place and keeps its identity for the field's
-      -- lifetime.
+      -- values keeps its identity; consumers watch this instead
       field.valuesRev = (field.valuesRev or 0) + 1
     end
   end
@@ -213,8 +194,7 @@ local function fieldFolderLoad(field, data, offset)
   end
 end
 
--- Per-type load dispatch, keyed by wire type id + 1.
--- UINT32..INT64 are unsupported (nil slots), as in the ELRS firmware.
+-- Keyed by wire type + 1; UINT32..INT64 unsupported, as in ELRS firmware
 local handlers = {
   [crsf.CONST.FIELD_UINT8 + 1] = fieldIntLoad,
   [crsf.CONST.FIELD_INT8 + 1] = fieldIntLoad,
@@ -271,8 +251,6 @@ end
 -- @return nil                      frame dropped (wrong device or field,
 --         cross-field continuation, duplicate chunk)
 function Params.reassemble(rx, deviceId, data, expectedFieldId)
-  -- Another device answered, or this is not the awaited field: drop any
-  -- partial data
   if data[2] ~= deviceId or data[3] ~= expectedFieldId then
     Params.resetChunks(rx)
     return nil
@@ -282,13 +260,8 @@ function Params.reassemble(rx, deviceId, data, expectedFieldId)
     return nil
   end
   local chunksRemain = data[4]
-  -- Trailing duplicates of a multi-chunk entry: when several consumers each
-  -- request the same field, every rx sees every answer, and the extra copies
-  -- of the final chunk arrive back to back after this rx already completed
-  -- the entry. Their header is indistinguishable from a fresh single-frame
-  -- entry, so they would decode as garbage. Swallow them until a new request
-  -- cycle starts -- traffic for another field, or our own encodeRead, both
-  -- of which clear done.
+  -- Other consumers' copies of the final chunk look like a fresh
+  -- single-frame entry; drop them until the next request cycle
   if rx.done then
     if rx.done == data[3] then
       if chunksRemain == 0 and not rx.data then
@@ -298,14 +271,12 @@ function Params.reassemble(rx, deviceId, data, expectedFieldId)
       rx.done = nil
     end
   end
-  -- chunksRemain changed while data is buffered: duplicate frame, drop it
-  if rx.data and chunksRemain ~= rx.expect then
+  if rx.data and chunksRemain ~= rx.expect then -- duplicate chunk
     return nil
   end
 
   local buffer
   local offset
-  -- If data is chunked, copy it to the persistent buffer
   if chunksRemain > 0 or rx.chunk > 0 then
     rx.data = rx.data or {}
     rx.dataId = data[3]
@@ -315,7 +286,6 @@ function Params.reassemble(rx, deviceId, data, expectedFieldId)
     end
     offset = 1
   else
-    -- All data arrived in one chunk, hand the frame back directly
     buffer = data
     offset = 5
   end
@@ -353,8 +323,7 @@ end
 -- @return field, or nil when the entry is shorter than parent + type + one
 --         name byte (the caller should still drop it from its queue)
 function Params.decodeEntry(field, fieldId, buffer, offset, cachedName)
-  -- Need at least parent + type + one name byte for the entry to be usable
-  if #buffer <= offset + 2 then
+  if #buffer <= offset + 2 then -- parent + type + one name byte
     return nil
   end
   field.id = fieldId
@@ -378,21 +347,14 @@ end
 -- ============================================================================
 -- Frame encoders
 --
--- Every encoder returns (frameType, payload) for the caller to push --
--- crsf.push(Params.encodeRead(...)) -- so encoding stays free of transport.
--- deviceId is the target device, handsetId the reply-to address. Wire
--- layouts match the tables in CRSFParameters.h.
+-- Each returns (frameType, payload) for crsf.push(). deviceId is the
+-- target, handsetId the reply-to address. Layouts per CRSFParameters.h.
 -- ============================================================================
 
 --- Encode a request for one chunk of a field's PARAMETER_SETTINGS_ENTRY.
--- Starts a new request cycle on rx: clears rx.done, and carries rx.chunk so
--- follow-up reads of a chunked entry continue where reassemble() left off
--- (0 requests a fresh entry).
+-- Starts a new request cycle on rx; sends rx.chunk (0 = fresh entry).
 -- @param rx         the reassembly-state table
--- @param deviceId   the target device address
--- @param handsetId  the reply-to address
 -- @param fieldId    the field id to read
--- @return frameType, payload
 function Params.encodeRead(rx, deviceId, handsetId, fieldId)
   rx.done = nil
   return crsf.CONST.FRAMETYPE_PARAMETER_READ, { deviceId, handsetId, fieldId, rx.chunk }
@@ -400,12 +362,8 @@ end
 
 --- Encode a PARAMETER_WRITE carrying a field's integer value, big-endian at
 -- the field's width. field.size < 0 marks a signed field |size| bytes wide
--- (decodeEntry's convention); negative values are re-encoded as two's
--- complement. A missing size means 1 byte.
--- @param deviceId   the target device address
--- @param handsetId  the reply-to address
+-- (decodeEntry's convention), sent as two's complement. Default 1 byte.
 -- @param field      table with id, value and optional size
--- @return frameType, payload
 function Params.encodeWriteInt(deviceId, handsetId, field)
   local value = field.value
   local size = field.size or 1
@@ -425,10 +383,7 @@ end
 
 --- Encode a PARAMETER_WRITE carrying a field's string value, clamped to
 -- field.maxlen (default 32), inner NULs stripped, null-terminated.
--- @param deviceId   the target device address
--- @param handsetId  the reply-to address
 -- @param field      table with id, value and optional maxlen
--- @return frameType, payload
 function Params.encodeWriteString(deviceId, handsetId, field)
   local frame = { deviceId, handsetId, field.id }
   local val = field.value or ""
@@ -448,31 +403,20 @@ end
 
 --- Encode a command-step PARAMETER_WRITE: one byte from the commandStep_e
 -- machine (crsf.CONST.CMD_CLICK / CMD_CONFIRMED / CMD_CANCEL / CMD_QUERY).
--- @param deviceId   the target device address
--- @param handsetId  the reply-to address
 -- @param fieldId    the command field's id
 -- @param step       the command step byte
--- @return frameType, payload
 function Params.encodeCommandStep(deviceId, handsetId, fieldId, step)
   return crsf.CONST.FRAMETYPE_PARAMETER_WRITE, { deviceId, handsetId, fieldId, step }
 end
 
--- Pseudo-field id: a PARAMETER_WRITE to this id calls supressCriticalErrors()
--- in TXModuleEndpoint.cpp (the firmware matches the bare 0x2E literal).
+-- Pseudo-field: TXModuleEndpoint.cpp calls supressCriticalErrors() on 0x2E
 local FIELD_ID_SUPPRESS_CRITICAL_ERRORS = 0x2E
 
 --- Encode the write that asks the module to stop reporting its critical
 -- error flags (the bits above crsf.CONST.ELRS_FLAGS_WARNING_THRESHOLD in
 -- the ELRS status byte).
--- @param deviceId   the target device address
--- @param handsetId  the reply-to address
--- @return frameType, payload
 function Params.encodeSuppressCriticalErrors(deviceId, handsetId)
   return crsf.CONST.FRAMETYPE_PARAMETER_WRITE, { deviceId, handsetId, FIELD_ID_SUPPRESS_CRITICAL_ERRORS, 0 }
 end
-
--- ============================================================================
--- Return codec table
--- ============================================================================
 
 return Params

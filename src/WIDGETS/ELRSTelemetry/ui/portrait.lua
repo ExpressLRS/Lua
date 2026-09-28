@@ -1,6 +1,6 @@
 ---------------------------------------------------------------------------
--- ELRS Telemetry Widget - UI for 320x480 (Portrait)                    --
--- FlySky EL18 — vertical screen                                        --
+-- ELRS Telemetry Widget - UI for 320x480 (Portrait)                     --
+-- FlySky EL18 — vertical screen                                         --
 ---------------------------------------------------------------------------
 
 local ctx = ...
@@ -10,8 +10,6 @@ local Components = ctx.Components
 
 local WidgetUI = {}
 
--- Font line heights, measured once. Fonts do not change under the widget, so
--- there is nothing to invalidate; this only avoids re-measuring per build.
 local metrics
 local function measured()
   if not metrics then
@@ -20,36 +18,27 @@ local function measured()
   return metrics
 end
 
--- Breakpoints: absolute pixel values for 320x480 portrait.
--- No half rung: portrait zones are tall, so everything past the third
--- breakpoint has the height for the whole card and goes straight to full.
+-- Breakpoints for 320x480 portrait.
+-- No half layout: portrait zones past 1/3 fit the full one.
 WidgetUI.breakpoints = {
   topBarW = 80,
   quarterH = 78,
   thirdH = 110,
 }
 
--- The full tier's hero is a ladder, not a size: the tier serves every zone
--- from the 145px third up to the 435px full. The ladder tops out at DBLSIZE:
--- the screen is narrow, and XXL digits crowd the caption and the readings
--- beside them off a 320-wide card.
+-- The full layout uses the largest LQ font that fits.
 WidgetUI.fonts = {
   compact = { hero = SMLSIZE },
   third = { hero = BOLD },
   full = { heroLadder = { DBLSIZE, MIDSIZE, BOLD } },
 }
 
--- The cap on bar thickness, in this screen's pixels.
+-- Max bar thickness.
 local BAR_H = 5
-
--- ============================================================================
--- Minimized layout builders (by widget height tier)
--- ============================================================================
 
 local TopBarUI = loadScript("/WIDGETS/ELRSTelemetry/ui/topbar.lua")({ Display = Display })
 
---- 1/4 and 1/6: one row of readings over the RSSI bar. The composition is
---- shared, and it sheds cells and bar height as the zone shrinks.
+--- 1/4 and 1/6 zones.
 function WidgetUI.buildCompact(w, h, opa)
   local m = measured()
   Components.compactTier(w, h, opa, m, {
@@ -58,7 +47,7 @@ function WidgetUI.buildCompact(w, h, opa)
   })
 end
 
---- 1/3: header, the hero beside the RSSI pair, one bar.
+--- 1/3 zones.
 function WidgetUI.buildThird(w, h, opa)
   local m = measured()
   Components.thirdTier(w, h, opa, m, {
@@ -67,9 +56,7 @@ function WidgetUI.buildThird(w, h, opa)
   })
 end
 
---- 1/1: the whole card -- header, hero, both bar rows, the reading grid.
---- Everything but the fonts is shared, so the composition itself lives in
---- ui/components.lua and this hands it the ladder the screen can afford.
+--- Full zone.
 function WidgetUI.buildFull(w, h, opa)
   local m = measured()
   Components.fullTier(w, h, opa, m, {
@@ -78,7 +65,6 @@ function WidgetUI.buildFull(w, h, opa)
   })
 end
 
---- Route to the appropriate minimized layout based on widget dimensions.
 function WidgetUI.build(wgtZone, opts)
   lvgl.clear()
   local w, h = wgtZone.w, wgtZone.h

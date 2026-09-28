@@ -8,11 +8,8 @@ local VTXDisplay = ctx.VTXDisplay
 
 local TopBarUI = {}
 
--- Same geometry as the stock Value widget in a top-bar zone: STD label at the
--- origin, MIDSIZE value 14 px (scaled) below it, both left aligned.
-local VALUE_Y = math.floor(14 * lvgl.LCD_SCALE + 0.5)
+local VALUE_Y = math.floor(14 * lvgl.LCD_SCALE + 0.5) -- stock Value widget offset
 
---- Top bar: label over value, matching EdgeTX's stock Value widget.
 function TopBarUI.build(w, h)
   lvgl.build({
     {

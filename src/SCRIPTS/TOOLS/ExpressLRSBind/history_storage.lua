@@ -1,24 +1,15 @@
 ---------------------------------------------------------------------------
 -- Bind Phrase History Storage                                           --
--- Loaded via loadScript() from ExpressLRSBind/main.lua with             --
--- (FileStorage); returns the History table.                             --
---                                                                       --
--- The last MAX phrases, newest first, persisted as indexed keys h1..hN  --
--- (the ELRSVTXAdmin presets c1..c6 idiom). Worst case                   --
--- MAX * (3 + 52 + 1) = 280 bytes, inside FileStorage's bounded 512-byte --
--- read; raising MAX or the phrase length must revisit that budget or    --
--- the tail entries truncate silently. No table.insert/remove: B&W      --
--- radios ship without the table library, so shifts are plain loops.     --
+-- Newest first, as keys h1..hN. MAX * 56 bytes must fit FileStorage's   --
+-- 512-byte read. No table library on B&W, so shifts are loops.          --
 ---------------------------------------------------------------------------
 
 local FileStorage = ...
 
--- Where the history lives on the SD card
 local PATH = "/SCRIPTS/TOOLS/ExpressLRSBind/history.txt"
 
 local MAX = 5
 
--- The file layout, declared once: FileStorage writes these keys in this order.
 local SAVE_KEYS = {}
 for i = 1, MAX do
   SAVE_KEYS[i] = "h" .. i
@@ -26,7 +17,6 @@ end
 
 local History = {
   MAX = MAX,
-  -- items[1] is the most recent phrase
   items = {},
 }
 
@@ -38,8 +28,7 @@ local function save()
   FileStorage.write(PATH, SAVE_KEYS, values)
 end
 
---- Put phrase at the front, dropping an existing copy (a re-used phrase
--- moves up instead of duplicating) and trimming past MAX.
+-- A re-used phrase moves to the front
 function History.add(phrase)
   if phrase == nil or phrase == "" then
     return
@@ -77,8 +66,7 @@ function History.clear()
   save()
 end
 
--- Initialize from file. h1..hN are read in order; the first missing key
--- ends the list, so a hand-edited file with gaps loads its head only.
+-- First missing key ends the list
 local kv = FileStorage.read(PATH)
 if kv then
   for i = 1, MAX do

@@ -2,18 +2,9 @@
 -- Full-Screen Editor                                                    --
 -- Loaded via loadScript() from ELRSVTXAdmin/loadable.lua with           --
 -- (VTXAdmin, PresetsStorage); returns the FullScreenUI table.           --
---                                                                       --
--- One layout for every screen size: VTX Settings editing                --
--- VTXAdmin.desired, the Send VTx button, 6POS Quick Change and preset   --
--- slot rows saving through PresetsStorage, and the no-module checklist. --
---                                                                       --
--- The page is built once, on full-screen entry, and never rebuilt, so   --
--- focus and scroll survive every value change. Values that change under --
--- it -- a collection switch swapping the preset rows, a 6POS move       --
--- rewriting VTXAdmin.desired -- reach the screen through each control's --
--- get() callback. choice and toggle re-poll it on every supported       --
--- firmware; numberEdit re-polls only on EdgeTX 2.12.0+, so on older     --
--- firmware its digits catch up when the page is next entered.           --
+-- Built once per entry and never rebuilt, so focus and scroll survive.  --
+-- Values refresh through get(); numberEdit re-polls only on 2.12.1+,    --
+-- older firmware catches up on the next entry.                          --
 ---------------------------------------------------------------------------
 
 local VTXAdmin, PresetsStorage = ...
@@ -21,14 +12,11 @@ local VTXAdmin, PresetsStorage = ...
 local FullScreenUI = {}
 
 -- ============================================================================
--- Row helpers (shared across all screen sizes)
+-- Row helpers
 -- ============================================================================
 
--- Portrait screens get a narrower label column to leave more room for controls.
 local LABEL_PCT = (LCD_W < LCD_H) and 42 or 50
 
--- One label per collection, from the storage's count -- the only place the
--- number of collections lives.
 local COLLECTION_VALUES = {}
 for i = 1, PresetsStorage.COLLECTION_COUNT do
   COLLECTION_VALUES[i] = table.concat({ "Collection ", i })
@@ -147,7 +135,7 @@ local function createSectionHeader(container, title)
 end
 
 -- ============================================================================
--- Full-screen LVGL layout (shared across all screen sizes)
+-- Full-screen layout
 -- ============================================================================
 
 function FullScreenUI.build()
@@ -168,7 +156,6 @@ function FullScreenUI.build()
     end,
   })
 
-  -- No module — show checklist instead of controls
   if not VTXAdmin.hasModule() then
     local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
     local heading = { type = lvgl.LABEL, text = "No module found. Check Model Setup:", color = COLOR_THEME_PRIMARY1 }
@@ -190,7 +177,6 @@ function FullScreenUI.build()
     flexFlow = lvgl.FLOW_COLUMN,
   })
 
-  -- VTX Settings section
   createSectionHeader(fields, "VTX Settings")
 
   createChoiceRow(fields, "Band", { "Off", "A", "B", "E", "F", "R", "L" }, function()
@@ -220,7 +206,7 @@ function FullScreenUI.build()
     return v == 0 and "-" or tostring(v)
   end)
 
-  -- Pit mode rides on the power byte, so ExpressLRS hides it while power is "-".
+  -- ExpressLRS hides pit mode while power is "-"
   createToggleRow(fields, "Pit Mode", function()
     return d.pitmode
   end, function(v)
@@ -253,7 +239,6 @@ function FullScreenUI.build()
     end,
   })
 
-  -- 6POS Quick Change section
   createSectionHeader(fields, "6POS Quick Change")
 
   createToggleRow(fields, "Enabled", function()
@@ -291,7 +276,6 @@ function FullScreenUI.build()
     "Assign a switch or button to manually push the current VTX config to the receiver."
   )
 
-  -- Presets section
   createSectionHeader(fields, "Presets")
 
   createChoiceRow(fields, "Collection", COLLECTION_VALUES, function()

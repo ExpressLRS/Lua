@@ -1,12 +1,5 @@
 ---------------------------------------------------------------------------
 -- Color LCD Dialogs                                                     --
--- Loaded via loadScript() with no arguments; returns the Dialogs table. --
--- Shared by every tool's LVGL UI; the widgets' full-screen pages reuse  --
--- the no-module checklist.                                              --
---                                                                       --
--- The version gate and the missing-module notice are terminal -- the    --
--- only way out is exiting the tool -- so each takes the caller's onExit --
--- and wires it to both the dialog's close box and its Exit button.      --
 ---------------------------------------------------------------------------
 
 local Dialogs = {}
@@ -27,9 +20,7 @@ function Dialogs.showMessage(options)
   })
 end
 
---- Build a full-screen dialog: a column of text lines over a single Exit
--- button. lines are label descriptors ({ text = ..., font = ... }), used
--- verbatim as children.
+-- lines: label descriptors { text, font }, used as children
 local function buildExitDialog(title, lines, onExit)
   lvgl.clear()
 
@@ -70,8 +61,6 @@ local function buildExitDialog(title, lines, onExit)
   return dg
 end
 
---- The EdgeTX version gate.
--- @param versions  REQUIRED_VERSIONS from SCRIPTS/ELRS/edgetx_version.lua
 function Dialogs.showVersionRequired(versions, onExit)
   local lines = { { type = lvgl.LABEL, text = "Requires EdgeTX:" } }
   for i, version in ipairs(versions) do
@@ -80,8 +69,6 @@ function Dialogs.showVersionRequired(versions, onExit)
   return buildExitDialog("EdgeTX Version Not Supported", lines, onExit)
 end
 
---- Label rows listing what to check when no CRSF module is found.
--- @param color  optional text color
 function Dialogs.noModuleChecklist(color)
   return {
     { type = lvgl.LABEL, color = color, text = "- Internal/External module enabled" },
@@ -97,7 +84,6 @@ function Dialogs.noModuleChecklist(color)
   }
 end
 
---- No CRSF module configured on the model.
 function Dialogs.showNoModule(onExit)
   return buildExitDialog("No Module Found: Check Model Settings", Dialogs.noModuleChecklist(), onExit)
 end

@@ -13,27 +13,17 @@ local VERSION = deps.VERSION
 
 local Dialogs = loadScript("/SCRIPTS/ELRS/ui/lvgl/dialogs.lua")()
 
--- ============================================================================
--- UI state
--- ============================================================================
-
 local UI = {
   currentPage = nil,
   uiBuilt = false,
   folderWasReady = false,
 
-  -- Warning/command state (LVGL-specific). commandPage remembers which kind
-  -- of page (confirm or executing) the current dialog is, so the dialog is
-  -- swapped exactly once per kind change.
+  -- Page kind shown; rebuild only when it changes
   warningDismissedAt = nil,
   warningDialog = nil,
   commandDialog = nil,
   commandPage = nil,
 }
-
--- ============================================================================
--- ModelMismatchDialog
--- ============================================================================
 
 local ModelMismatchDialog = {}
 
@@ -91,10 +81,6 @@ end
 local function exitTool()
   App.shouldExit = true
 end
-
--- ============================================================================
--- CommandPage: Non-modal pages for command confirm/executing states
--- ============================================================================
 
 local CommandPage = {}
 local spinnerAngle = 0
@@ -158,8 +144,7 @@ function CommandPage.showConfirm(name, getInfo, onConfirm, onCancel)
       w = lvgl.PERCENT_SIZE + 100,
       align = CENTER,
       color = COLOR_THEME_DISABLED,
-      -- Prompt supplied by the caller as a getter so it refreshes each frame
-      text = getInfo,
+      text = getInfo, -- getter: shows each CMD_QUERY reply
     },
     {
       type = lvgl.RECTANGLE,
@@ -227,13 +212,11 @@ function CommandPage.showExecuting(title, getInfo, onCancel)
       thickness = 0,
     },
     {
-      -- Live status text the device sends back while the command runs.
-      -- Supplied by the caller as a getter so each CMD_QUERY poll response is shown.
       type = lvgl.LABEL,
       w = lvgl.PERCENT_SIZE + 100,
       align = CENTER,
       font = BOLD,
-      text = getInfo,
+      text = getInfo, -- getter: shows each CMD_QUERY reply
     },
     {
       type = lvgl.RECTANGLE,
@@ -275,15 +258,7 @@ function CommandPage.showExecuting(title, getInfo, onCancel)
   return pg
 end
 
--- ============================================================================
--- Interface: init
--- ============================================================================
-
 function UI.init() end
-
--- ============================================================================
--- Interface: preCheck (version and module gates)
--- ============================================================================
 
 function UI.preCheck(_event)
   if deps.versionOk and App.checkCrsfModule() then
@@ -303,35 +278,19 @@ function UI.preCheck(_event)
   return 0
 end
 
--- ============================================================================
--- Interface: invalidate
--- ============================================================================
-
 function UI.invalidate()
   UI.uiBuilt = false
 end
 
--- ============================================================================
--- Interface: onDeviceLoaded
--- ============================================================================
-
 function UI.onDeviceLoaded()
   UI.invalidate()
 end
-
--- ============================================================================
--- Interface: onNewDevice
--- ============================================================================
 
 function UI.onNewDevice()
   if Navigation.getCurrent() == Navigation.FOLDER_OTHER_DEVICES or UI.folderWasReady then
     UI.invalidate()
   end
 end
-
--- ============================================================================
--- Interface: handleUnsupported
--- ============================================================================
 
 function UI.handleUnsupported()
   if not UI.uiBuilt then
@@ -343,13 +302,8 @@ function UI.handleUnsupported()
   end
 end
 
--- ============================================================================
--- User action handlers (call App for business logic)
--- ============================================================================
-
 function UI.openFolder(folderId, folderName)
-  -- The subtitle shows the folder name without the dynamic value suffix
-  -- ExpressLRS embeds in it (e.g. "VTX Admin (R:4:2:P)").
+  -- Strip the value suffix, e.g. "VTX Admin (R:4:2:P)"
   if folderName then
     local par = string.find(folderName, " (", 1, true)
     if par then
@@ -387,18 +341,10 @@ function UI.handleBack()
   end
 end
 
--- ============================================================================
--- Command popup handling
--- ============================================================================
-
--- Two kinds of command page. CLICK, CONFIRMED and EXECUTING share the
--- executing one -- its info getter switches the text in place -- so the page
--- is rebuilt only when the kind changes, never on a status edge.
+-- CLICK, CONFIRMED and EXECUTING share one page
 local PAGE_CONFIRM = 1
 local PAGE_EXECUTING = 2
--- Grace after a click before "Sending..." replaces the settings page
--- (ticks): a healthy link answers within it and goes straight to the
--- confirm dialog, with nothing flashing in between.
+-- 200 ms: a healthy link answers first, so nothing flashes
 local PENDING_PAGE_DELAY = 20
 
 local function onCommandCancel()
@@ -446,10 +392,6 @@ local function handleCommandPopup()
   end
 end
 
--- ============================================================================
--- Warning handling
--- ============================================================================
-
 local function handleWarning()
   if App.shouldExit then
     return
@@ -484,10 +426,6 @@ local function handleWarning()
   end
 end
 
--- ============================================================================
--- Interface: render
--- ============================================================================
-
 function UI.render(_event, _touchState)
   handleCommandPopup()
 
@@ -499,10 +437,6 @@ function UI.render(_event, _touchState)
     end
   end
 end
-
--- ============================================================================
--- Subtitle builder
--- ============================================================================
 
 function UI.getSubtitle()
   if not Navigation.isAtRoot() then
@@ -540,20 +474,12 @@ function UI.getSubtitle()
   return subtitle
 end
 
--- ============================================================================
--- Field value increment
--- ============================================================================
-
 function UI.isBooleanField(field)
   if not field.values or #field.values ~= 2 then
     return false
   end
   return field.values[1] == "Off" and field.values[2] == "On"
 end
-
--- ============================================================================
--- Widget creators
--- ============================================================================
 
 local IS_NARROW = LCD_W < 400
 local LABEL_PCT = lvgl.PERCENT_SIZE + (IS_NARROW and 42 or 50)
@@ -617,8 +543,7 @@ function UI.createChoiceRow(pg, field)
       if field.hidden then
         return false
       end
-      -- The values table is refilled in place (identity is stable); the
-      -- codec bumps valuesRev when the contents change.
+      -- values is refilled in place; valuesRev marks changes
       if field.valuesRev ~= valuesRef then
         valuesRef = field.valuesRev
         if choiceWidget then
@@ -859,10 +784,6 @@ function UI.buildFieldWidget(pg, field)
     return UI.createInfoRow(pg, field)
   end
 end
-
--- ============================================================================
--- Main build function
--- ============================================================================
 
 function UI.build()
   lvgl.clear()
