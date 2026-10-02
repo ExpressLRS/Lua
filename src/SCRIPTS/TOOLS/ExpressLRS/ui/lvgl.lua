@@ -296,7 +296,7 @@ function UI.handleUnsupported()
   if not UI.uiBuilt then
     Dialogs.showMessage({
       title = "Unsupported Firmware",
-      message = "ELRS 1.x firmware detected. Please update to 3.5.4 or later.",
+      message = "Requires ExpressLRS 3.5.4 or later.",
     })
     UI.uiBuilt = true
   end

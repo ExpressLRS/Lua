@@ -14,13 +14,16 @@ local WRITE_SPACING = 5 -- minimum gap between parameter writes (50 ms)
 local WRITE_SETTLE = 20 -- post-write quiet time before the next read
 local CANCEL_GRACE = 200 -- wait for CMD_IDLE after a requested cancel (2 s)
 
+local ELRS_MIN_VERSION = 0x030504 -- 3.5.4: spec-compliant folders (ExpressLRS#3123)
+
 local CRSFSession = {}
 CRSFSession.__index = CRSFSession
 
 --- opts: deviceId, handsetId, responseTimeout (ticks; 50 local TX, 500
 --- remote), acceptUnsolicited (any field; default only the awaited one),
---- discovery (fills .devices), trackStatus (.status at 1 Hz), detectV1
---- (latches .v1Detected), preload (queue subfolders after root load),
+--- discovery (fills .devices), trackStatus (.status at 1 Hz),
+--- detectUnsupported (latches .unsupported on ELRS 1.x or a TX below
+--- ELRS_MIN_VERSION), preload (queue subfolders after root load),
 --- onFieldUpdate(field), onDeviceUpdate(device, isNew)
 function CRSFSession.new(opts)
   opts = opts or {}
@@ -35,13 +38,13 @@ function CRSFSession.new(opts)
     commandAt = 0, -- click tick; UIs time grace periods from it
     status = { flags = 0, warning = "" }, -- identity stable; safe to cache
     fieldHiddenChanged = nil,
-    v1Detected = nil,
+    unsupported = nil,
     rx = { chunk = 0, expect = -1 },
 
     _acceptUnsolicited = opts.acceptUnsolicited,
     _discovery = opts.discovery,
     _trackStatus = opts.trackStatus,
-    _detectV1 = opts.detectV1,
+    _detectUnsupported = opts.detectUnsupported,
     _preload = opts.preload,
     _respTimeout = opts.responseTimeout,
     _onFieldUpdate = opts.onFieldUpdate,
@@ -131,7 +134,7 @@ function CRSFSession:_onFrame(command, data)
       self:_onStatus(data)
     end
   elseif command == crsf.CONST.FRAMETYPE_PARAMETER_WRITE then
-    if self._detectV1 then
+    if self._detectUnsupported then
       self:_onWrite(data)
     end
   end
@@ -151,6 +154,14 @@ function CRSFSession:_onDeviceInfo(data)
   device.name = info.name
   device.fieldCount = info.fieldCount
   device.isElrs = info.isElrs
+  if
+    self._detectUnsupported
+    and info.isElrs
+    and info.id == crsf.CONST.ADDRESS_TX
+    and (info.vMaj * 256 + info.vMin) * 256 + info.vRev < ELRS_MIN_VERSION
+  then
+    self.unsupported = true
+  end
   if self._onDeviceUpdate then
     self._onDeviceUpdate(device, isNew)
   end
@@ -178,7 +189,7 @@ end
 
 function CRSFSession:_onWrite(data)
   if crsf:isElrsV1Frame(data) then
-    self.v1Detected = true
+    self.unsupported = true
   end
 end
 
