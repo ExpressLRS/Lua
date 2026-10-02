@@ -85,8 +85,7 @@ end
 
 function UI.handleUnsupported()
   Dialogs.draw("Unsupported", {
-    "ELRS 1.x firmware",
-    "detected. Update to",
+    "Requires ExpressLRS",
     "3.5.4 or later.",
   })
 end

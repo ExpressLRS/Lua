@@ -13,14 +13,18 @@ local PING_PERIOD = 100 -- discovery ping cadence while no device answered
 local WRITE_SPACING = 5 -- minimum gap between parameter writes (50 ms)
 local WRITE_SETTLE = 20 -- post-write quiet time before the next read
 local CANCEL_GRACE = 200 -- wait for CMD_IDLE after a requested cancel (2 s)
+local QUERY_PERIOD = 100 -- command poll cadence without a device timeout (1 s)
+
+local ELRS_MIN_VERSION = 0x030504 -- 3.5.4: spec-compliant folders (ExpressLRS#3123)
 
 local CRSFSession = {}
 CRSFSession.__index = CRSFSession
 
 --- opts: deviceId, handsetId, responseTimeout (ticks; 50 local TX, 500
 --- remote), acceptUnsolicited (any field; default only the awaited one),
---- discovery (fills .devices), trackStatus (.status at 1 Hz), detectV1
---- (latches .v1Detected), preload (queue subfolders after root load),
+--- discovery (fills .devices), trackStatus (.status at 1 Hz),
+--- detectUnsupported (latches .unsupported on ELRS 1.x or a TX below
+--- ELRS_MIN_VERSION), preload (queue subfolders after root load),
 --- onFieldUpdate(field), onDeviceUpdate(device, isNew)
 function CRSFSession.new(opts)
   opts = opts or {}
@@ -36,13 +40,13 @@ function CRSFSession.new(opts)
     commandResult = nil, -- { name, info } closing text of a finished command
     status = { flags = 0, warning = "" }, -- identity stable; safe to cache
     fieldHiddenChanged = nil,
-    v1Detected = nil,
+    unsupported = nil,
     rx = { chunk = 0, expect = -1 },
 
     _acceptUnsolicited = opts.acceptUnsolicited,
     _discovery = opts.discovery,
     _trackStatus = opts.trackStatus,
-    _detectV1 = opts.detectV1,
+    _detectUnsupported = opts.detectUnsupported,
     _preload = opts.preload,
     _respTimeout = opts.responseTimeout,
     _onFieldUpdate = opts.onFieldUpdate,
@@ -79,6 +83,15 @@ function CRSFSession:_responseTimeout()
     return self._respTimeout
   end
   return self.isElrsTx and 50 or 500
+end
+
+-- Some devices send timeout 0; never poll every tick
+function CRSFSession:_queryPeriod()
+  local timeout = self.command.timeout
+  if timeout and timeout > 0 then
+    return timeout
+  end
+  return QUERY_PERIOD
 end
 
 -- ============================================================================
@@ -132,7 +145,7 @@ function CRSFSession:_onFrame(command, data)
       self:_onStatus(data)
     end
   elseif command == crsf.CONST.FRAMETYPE_PARAMETER_WRITE then
-    if self._detectV1 then
+    if self._detectUnsupported then
       self:_onWrite(data)
     end
   end
@@ -152,6 +165,14 @@ function CRSFSession:_onDeviceInfo(data)
   device.name = info.name
   device.fieldCount = info.fieldCount
   device.isElrs = info.isElrs
+  if
+    self._detectUnsupported
+    and info.isElrs
+    and info.id == crsf.CONST.ADDRESS_TX
+    and (info.vMaj * 256 + info.vMin) * 256 + info.vRev < ELRS_MIN_VERSION
+  then
+    self.unsupported = true
+  end
   if self._onDeviceUpdate then
     self._onDeviceUpdate(device, isNew)
   end
@@ -179,7 +200,7 @@ end
 
 function CRSFSession:_onWrite(data)
   if crsf:isElrsV1Frame(data) then
-    self.v1Detected = true
+    self.unsupported = true
   end
 end
 
@@ -266,7 +287,7 @@ function CRSFSession:_onEntry(data)
   end
 
   if self.command then
-    self._nextQueryAt = now + (self.command.timeout or 100)
+    self._nextQueryAt = now + self:_queryPeriod()
   end
   if self._loadQueue[1] then
     self._nextReadAt = 0
@@ -581,7 +602,7 @@ function CRSFSession:tick()
   if self.command then
     if now > self._nextQueryAt and self.command.status ~= crsf.CONST.CMD_ASKCONFIRM then
       self:_sendStep(self.command.id, crsf.CONST.CMD_QUERY)
-      self._nextQueryAt = now + (self.command.timeout or 100)
+      self._nextQueryAt = now + self:_queryPeriod()
     end
     return -- reads starve while a command runs, by design
   end

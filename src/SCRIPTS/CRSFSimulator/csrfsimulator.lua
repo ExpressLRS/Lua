@@ -23,6 +23,7 @@ local shim = loadScript("/SCRIPTS/CRSFSimulator/shim.lua")()
 --   slow_loading       PARAMETER_READ answers delayed ~2 s each
 --   no_module          no CRSF module
 --   critical_error     baud rate error; suppress write (0x2E) clears it
+--   old_firmware       TX reports ELRS 3.4.2, below the 3.5.4 minimum
 -- Connected scenarios also arm while CH5 (AUX1) is high.
 local config = {
   scenario = "normal",
@@ -205,7 +206,7 @@ local function encodeDeviceInfo(device, destAddr)
   appendString(data, device.name)
   appendU32BE(data, device.serialNo or CRSF.ELRS_SERIAL_ID)
   appendU32BE(data, device.hwVer or 0)
-  appendU32BE(data, device.swVer or 0x00030500) -- 3.5.0
+  appendU32BE(data, device.swVer or 0x00040100) -- 4.1.0
   data[#data + 1] = device.fieldCount
   data[#data + 1] = 0 -- parameter version
   return data
@@ -349,7 +350,7 @@ local txDevice = {
   name = "TX16S MK3",
   serialNo = CRSF.ELRS_SERIAL_ID,
   hwVer = 0,
-  swVer = 0x00030500, -- 3.5.0
+  swVer = config.scenario == "old_firmware" and 0x00030402 or 0x00040100, -- 3.4.2 / 4.1.0
   fieldCount = 26,
   params = {
     {
@@ -528,7 +529,7 @@ local txDevice = {
 
     { id = 22, parent = 0, type = CRSF.INFO, name = "Bad/Good", value = "0/250", hidden = true },
 
-    { id = 23, parent = 0, type = CRSF.INFO, name = "3.5.0 ISM2G4", value = "825ed8" },
+    { id = 23, parent = 0, type = CRSF.INFO, name = "4.1.0 ISM2G4", value = "825ed8" },
 
     -- Not a real TX parameter; tests INT8 sign handling
     {
@@ -554,7 +555,7 @@ local rxDevice = {
   name = "Bob 2400RX",
   serialNo = CRSF.ELRS_SERIAL_ID,
   hwVer = 0,
-  swVer = 0x00030500, -- 3.5.0
+  swVer = 0x00040100, -- 4.1.0
   fieldCount = 26,
   params = {
     {
@@ -738,7 +739,7 @@ local rxDevice = {
 
     { id = 24, parent = 0, type = CRSF.INFO, name = "Model Id", value = "12" },
 
-    { id = 25, parent = 0, type = CRSF.INFO, name = "RX Version", value = "3.5.0 825ed8" },
+    { id = 25, parent = 0, type = CRSF.INFO, name = "RX Version", value = "4.1.0 825ed8" },
   },
 }
 
