@@ -15,14 +15,44 @@ local FullScreenUI = {}
 -- Row helpers
 -- ============================================================================
 
-local LABEL_PCT = (LCD_W < LCD_H) and 42 or 50
+local PORTRAIT = LCD_W < LCD_H
+local LABEL_PCT = PORTRAIT and 42 or 50
 
 local COLLECTION_VALUES = {}
 for i = 1, PresetsStorage.COLLECTION_COUNT do
   COLLECTION_VALUES[i] = table.concat({ "Collection ", i })
 end
 
+local function createHintRow(container, text)
+  container:rectangle({
+    w = lvgl.PERCENT_SIZE + 100,
+    thickness = 0,
+    children = {
+      {
+        type = lvgl.LABEL,
+        text = text,
+        color = COLOR_THEME_DISABLED,
+        font = SMLSIZE,
+        w = lvgl.PERCENT_SIZE + 100,
+      },
+    },
+  })
+end
+
 local function createRow(container, label, hint, visibleFn)
+  -- Portrait: hints go under the row
+  local hintBelow = hint and PORTRAIT
+  if hintBelow then
+    container = container:rectangle({
+      w = lvgl.PERCENT_SIZE + 100,
+      thickness = 0,
+      flexFlow = lvgl.FLOW_COLUMN,
+      flexPad = 0,
+      visible = visibleFn,
+    })
+    visibleFn = nil
+  end
+
   local row = container:rectangle({
     w = lvgl.PERCENT_SIZE + 100,
     thickness = 0,
@@ -34,7 +64,8 @@ local function createRow(container, label, hint, visibleFn)
   local labelChildren = {
     { type = lvgl.LABEL, y = lvgl.PAD_SMALL, text = label, color = COLOR_THEME_PRIMARY1 },
   }
-  if hint then
+  local hintBeside = hint and not hintBelow
+  if hintBeside then
     labelChildren[#labelChildren + 1] = {
       type = lvgl.LABEL,
       text = hint,
@@ -47,8 +78,8 @@ local function createRow(container, label, hint, visibleFn)
   row:rectangle({
     w = lvgl.PERCENT_SIZE + LABEL_PCT,
     thickness = 0,
-    flexFlow = hint and lvgl.FLOW_COLUMN or nil,
-    h = not hint and lvgl.UI_ELEMENT_HEIGHT or nil,
+    flexFlow = hintBeside and lvgl.FLOW_COLUMN or nil,
+    h = not hintBeside and lvgl.UI_ELEMENT_HEIGHT or nil,
     children = labelChildren,
   })
 
@@ -59,11 +90,15 @@ local function createRow(container, label, hint, visibleFn)
     align = LEFT + VCENTER,
   })
 
+  if hintBelow then
+    createHintRow(container, hint)
+  end
+
   return ctrl
 end
 
-local function createChoiceRow(container, label, values, getFn, setFn)
-  local ctrl = createRow(container, label)
+local function createChoiceRow(container, label, values, getFn, setFn, hint)
+  local ctrl = createRow(container, label, hint)
   ctrl:choice({
     title = label,
     values = values,
@@ -98,22 +133,6 @@ local function createSourceRow(container, label, getFn, setFn, filter, hint)
     get = getFn,
     set = setFn,
     filter = filter,
-  })
-end
-
-local function createHintRow(container, text)
-  container:rectangle({
-    w = lvgl.PERCENT_SIZE + 100,
-    thickness = 0,
-    children = {
-      {
-        type = lvgl.LABEL,
-        text = text,
-        color = COLOR_THEME_DISABLED,
-        font = SMLSIZE,
-        w = lvgl.PERCENT_SIZE + 100,
-      },
-    },
   })
 end
 
@@ -282,9 +301,7 @@ function FullScreenUI.build()
     return PresetsStorage.collection
   end, function(idx)
     PresetsStorage.selectCollection(idx)
-  end)
-
-  createHintRow(fields, "Assign a Band and Channel to each 6POS switch position. Switching collection swaps all six.")
+  end, "Assign a Band and Channel to each 6POS switch position. Switching collection swaps all six.")
 
   local bandValues = { "--", "A", "B", "E", "F", "R", "L" }
   for i = 1, 6 do
