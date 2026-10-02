@@ -351,7 +351,7 @@ local txDevice = {
   serialNo = CRSF.ELRS_SERIAL_ID,
   hwVer = 0,
   swVer = config.scenario == "old_firmware" and 0x00030402 or 0x00040100, -- 3.4.2 / 4.1.0
-  fieldCount = 26,
+  fieldCount = 25,
   params = {
     {
       id = 1,

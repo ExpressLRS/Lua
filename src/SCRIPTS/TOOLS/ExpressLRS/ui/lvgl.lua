@@ -294,10 +294,7 @@ end
 
 function UI.handleUnsupported()
   if not UI.uiBuilt then
-    Dialogs.showMessage({
-      title = "Unsupported Firmware",
-      message = "Requires ExpressLRS 3.5.4 or later.",
-    })
+    Dialogs.showMessage("Unsupported Firmware", "Requires ExpressLRS 3.5.4 or later.")
     UI.uiBuilt = true
   end
 end
@@ -322,13 +319,9 @@ end
 
 function UI.handleBack()
   if Navigation.isAtRoot() then
-    Dialogs.showConfirm({
-      title = "Exit",
-      message = "Exit ExpressLRS Lua script?",
-      onConfirm = function()
-        App.shouldExit = true
-      end,
-    })
+    Dialogs.showConfirm("Exit", "Exit ExpressLRS Lua script?", function()
+      App.shouldExit = true
+    end)
   else
     local entry = App.goBack()
     if entry and entry.type == Navigation.TYPE_DEVICE and entry.prevDeviceId then
@@ -406,10 +399,7 @@ local function handleWarning()
           App.shouldExit = true
         end)
       elseif session.status.criticalError then
-        Dialogs.showMessage({
-          title = "Warning",
-          message = session.status.warning,
-        })
+        Dialogs.showMessage("Warning", session.status.warning)
         UI.warningDialog = true
         UI.warningDismissedAt = getTime()
       end
@@ -440,7 +430,7 @@ function UI.render(_event, _touchState)
     local result = session.commandResult
     if result then
       session.commandResult = nil
-      Dialogs.showInfo({ title = result.name, message = result.info })
+      Dialogs.showInfo(result.name, result.info)
     end
   end
 end
