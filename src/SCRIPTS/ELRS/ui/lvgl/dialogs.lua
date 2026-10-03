@@ -4,31 +4,21 @@
 
 local Dialogs = {}
 
-function Dialogs.showConfirm(options)
-  return lvgl.confirm({
-    title = options.title,
-    message = options.message,
-    confirm = options.onConfirm,
-    cancel = options.onCancel,
-  })
+function Dialogs.showConfirm(title, message, onConfirm)
+  return lvgl.confirm({ title = title, message = message, confirm = onConfirm })
 end
 
-function Dialogs.showMessage(options)
-  return lvgl.message({
-    title = options.title,
-    message = options.message,
-  })
+function Dialogs.showMessage(title, message)
+  return lvgl.message({ title = title, message = message })
 end
 
 -- lines: label descriptors { text, font }, used as children
-local function buildExitDialog(title, lines, onExit)
-  lvgl.clear()
-
+local function buildDialog(title, lines, onClose)
   local dg = lvgl.dialog({
     title = title,
     flexFlow = lvgl.FLOW_COLUMN,
     flexPad = lvgl.PAD_SMALL,
-    close = onExit,
+    close = onClose,
   })
 
   dg:build({
@@ -48,10 +38,12 @@ local function buildExitDialog(title, lines, onExit)
         {
           type = lvgl.BUTTON,
           w = lvgl.PERCENT_SIZE + 98,
-          text = "Exit",
+          text = "Close",
           press = function()
             dg:close()
-            onExit()
+            if onClose then
+              onClose()
+            end
           end,
         },
       },
@@ -59,6 +51,15 @@ local function buildExitDialog(title, lines, onExit)
   })
 
   return dg
+end
+
+function Dialogs.showInfo(title, message)
+  return buildDialog(title, { { type = lvgl.LABEL, text = message } })
+end
+
+local function buildExitDialog(title, lines, onExit)
+  lvgl.clear()
+  return buildDialog(title, lines, onExit)
 end
 
 function Dialogs.showVersionRequired(versions, onExit)

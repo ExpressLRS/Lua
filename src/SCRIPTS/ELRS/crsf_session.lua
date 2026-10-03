@@ -37,6 +37,7 @@ function CRSFSession.new(opts)
     devices = {},
     command = nil, -- the command field driving the active popup
     commandAt = 0, -- click tick; UIs time grace periods from it
+    commandResult = nil, -- { name, info } closing text of a finished command
     status = { flags = 0, warning = "" }, -- identity stable; safe to cache
     fieldHiddenChanged = nil,
     unsupported = nil,
@@ -262,6 +263,7 @@ function CRSFSession:_onEntry(data)
     if field.type == crsf.CONST.FIELD_COMMAND and field.status == crsf.CONST.CMD_IDLE and self.command == field then
       -- Command finished: re-read what it may have changed. Only the active
       -- command; idle command fields also load while browsing
+      self.commandResult = field.info and { name = field.name, info = field.info } or nil
       self:_reloadRelated(field)
       self.command = nil
       self._pendingFrame = nil

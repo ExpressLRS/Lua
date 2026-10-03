@@ -556,7 +556,7 @@ local rxDevice = {
   serialNo = CRSF.ELRS_SERIAL_ID,
   hwVer = 0,
   swVer = 0x00040100, -- 4.1.0
-  fieldCount = 25,
+  fieldCount = 26,
   params = {
     {
       id = 1,
@@ -724,6 +724,17 @@ local rxDevice = {
       status = CRSF.CMD_IDLE,
       timeout = 200,
       info = "",
+    },
+    -- Finishes at once with an info text, as TBS allows
+    {
+      id = 26,
+      parent = 0,
+      type = CRSF.COMMAND,
+      name = "Reset Stats",
+      status = CRSF.CMD_IDLE,
+      timeout = 200,
+      info = "",
+      result = "OK",
     },
 
     { id = 24, parent = 0, type = CRSF.INFO, name = "Model Id", value = "12" },
@@ -1016,6 +1027,9 @@ local function handleCommandWrite(device, param, newStatus)
     if newStatus == CRSF.CMD_CLICK and needsConfirm then
       state.status = CRSF.CMD_ASKCONFIRM
       state.info = "Confirm " .. param.name .. "?"
+    elseif param.result then
+      state.status = CRSF.CMD_IDLE
+      state.info = param.result
     else
       state.status = CRSF.CMD_EXECUTING
       if param.persistent then
