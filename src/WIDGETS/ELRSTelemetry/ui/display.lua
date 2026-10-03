@@ -311,8 +311,7 @@ function Display.antColor(n)
     if not Telemetry.isConnected() then
       return COLOR_THEME_DISABLED
     end
-    -- ANT is 0-based.
-    if (Telemetry.link.ant or 0) + 1 == n then
+    if Telemetry.activeAnt() == n then
       return COLOR_THEME_FOCUS -- not PRIMARY1: black on light themes
     end
     return COLOR_THEME_DISABLED

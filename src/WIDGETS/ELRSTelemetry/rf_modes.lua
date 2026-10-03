@@ -183,6 +183,15 @@ function RfModes.hasSnr(rfmd)
   return not (name and NO_SNR[name])
 end
 
+-- Path 1 sub-GHz, path 2 2.4 GHz
+local X_BAND = { X100Full = true, X150 = true }
+
+function RfModes.isXband(rfmd)
+  local names = RfModes._names
+  local name = names and names[rfmd + 1]
+  return name ~= nil and X_BAND[name] == true
+end
+
 -- ============================================================================
 -- Return module
 -- ============================================================================
