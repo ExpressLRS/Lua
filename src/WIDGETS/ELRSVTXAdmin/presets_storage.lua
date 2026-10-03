@@ -12,9 +12,9 @@ local PATH = "/WIDGETS/ELRSVTXAdmin/presets.txt"
 local COLLECTION_COUNT = 6
 local SLOT_COUNT = 6
 
--- Worst case ~225 bytes. FileStorage reads 512; past that the tail
+-- Worst case ~240 bytes. FileStorage reads 512; past that the tail
 -- collections are lost and reset to defaults on the next save.
-local SAVE_KEYS = { "enabled", "source", "autoPushVtx", "pushSource", "collection" }
+local SAVE_KEYS = { "enabled", "source", "applyOnStart", "autoPushVtx", "pushSource", "collection" }
 local COLLECTION_KEYS = {}
 for c = 1, COLLECTION_COUNT do
   COLLECTION_KEYS[c] = table.concat({ "c", c })
@@ -35,6 +35,7 @@ local PresetsStorage = {
   -- Not persisted; shared so each edge is consumed once per radio
   latch = {
     lastPos = -1, -- last consumed 6POS position
+    sourceSeen = 0, -- source lastPos came from
     lastCollection = -1,
     stablePos = -1, -- debounce candidate
     stableTime = 0,
@@ -45,6 +46,7 @@ local PresetsStorage = {
 
   enabled = false,
   source = 0, -- 6POS source ID (0 = not configured)
+  applyOnStart = false, -- apply the switch's preset on the first reading
   autoPushVtx = false, -- auto push to VTX on 6POS change
   pushSource = 0, -- source ID for manual "Send VTx" trigger (0 = not configured)
 }
@@ -79,12 +81,13 @@ local function splitSlots(val)
   return slots
 end
 
---- presets.txt: enabled/autoPushVtx "1"/"0", source/pushSource are source
+--- presets.txt: enabled/applyOnStart/autoPushVtx "1"/"0", source/pushSource are source
 --- IDs, collection 1..6, c1..c6 = "band,channel;...". Default slots R1..R6.
 function PresetsStorage.load()
   local kv = FileStorage.read(PATH) or {}
   PresetsStorage.enabled = (kv.enabled == "1")
   PresetsStorage.source = tonumber(kv.source) or 0
+  PresetsStorage.applyOnStart = (kv.applyOnStart == "1")
   PresetsStorage.autoPushVtx = (kv.autoPushVtx == "1")
   PresetsStorage.pushSource = tonumber(kv.pushSource) or 0
 
@@ -112,6 +115,7 @@ function PresetsStorage.save()
   local values = {
     enabled = PresetsStorage.enabled and "1" or "0",
     source = PresetsStorage.source,
+    applyOnStart = PresetsStorage.applyOnStart and "1" or "0",
     autoPushVtx = PresetsStorage.autoPushVtx and "1" or "0",
     pushSource = PresetsStorage.pushSource,
     collection = PresetsStorage.collection,
