@@ -10,6 +10,9 @@ local FullScreenUI = {}
 -- Narrower labels on portrait.
 local LABEL_PCT = (LCD_W < LCD_H) and 42 or 50
 
+-- X-band paths, by antenna number
+local BANDS = { "SubG", "2.4" }
+
 -- "--" while the link is down.
 local function whenConnected(fn)
   return function()
@@ -119,6 +122,18 @@ function FullScreenUI.build()
       if rssi1 == nil then
         return "--"
       end
+      if Telemetry.isXband() then
+        return table.concat({
+          BANDS[1],
+          " ",
+          tostring(rssi1),
+          " / ",
+          BANDS[2],
+          " ",
+          tostring(Telemetry.link.rssi2),
+          " dBm",
+        })
+      end
       if Telemetry.hasDiversity() then
         return table.concat({ tostring(rssi1), " / ", tostring(Telemetry.link.rssi2), " dBm" })
       end
@@ -143,19 +158,17 @@ function FullScreenUI.build()
 
   createDisplayRow(
     fields,
-    "Active Antenna",
+    function()
+      return Telemetry.isXband() and "Active Band" or "Active Antenna"
+    end,
     whenConnected(function()
       if not Telemetry.hasDiversity() then
         return "N/A"
       end
-      -- 1-based on purpose; EdgeTX shows raw ANT 0/1
-      if Telemetry.link.ant == 0 then
-        return "Ant 1"
+      if Telemetry.isXband() then
+        return BANDS[Telemetry.activeAnt()]
       end
-      if Telemetry.link.ant == 1 then
-        return "Ant 2"
-      end
-      return "--"
+      return "Ant " .. Telemetry.activeAnt()
     end)
   )
 

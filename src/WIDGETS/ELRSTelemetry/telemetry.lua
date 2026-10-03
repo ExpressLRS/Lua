@@ -54,6 +54,10 @@ Telemetry._statusAnswered = nil
 
 Telemetry._wasConnected = false
 
+-- Raw ANT of antenna 1: 0 before EdgeTX 2.12.3, 1 after; nil until a 0 or 2 shows
+---@type number?
+Telemetry._antBase = nil
+
 ---@type number?
 Telemetry._sampledAt = nil
 
@@ -96,9 +100,22 @@ function Telemetry.statusLevel()
   return STATUS.OK
 end
 
+-- 1 or 2; the stronger RSSI until ANT's base is known (0 dBm is no reading)
+function Telemetry.activeAnt()
+  local link = Telemetry.link
+  if link.ant then
+    return link.ant
+  end
+  local rssi1, rssi2 = link.rssi1, link.rssi2
+  if rssi2 ~= nil and rssi2 ~= 0 and (rssi1 == nil or rssi1 == 0 or rssi2 > rssi1) then
+    return 2
+  end
+  return 1
+end
+
 function Telemetry.activeRssi()
   local link = Telemetry.link
-  return (link.ant == 1) and link.rssi2 or link.rssi1
+  return (Telemetry.activeAnt() == 2) and link.rssi2 or link.rssi1
 end
 
 -- dB above the RF mode's sensitivity floor
@@ -128,6 +145,11 @@ end
 function Telemetry.hasSnr()
   local rfmd = Telemetry.link.rfmd
   return rfmd == nil or RfModes.hasSnr(rfmd)
+end
+
+function Telemetry.isXband()
+  local rfmd = Telemetry.link.rfmd
+  return rfmd ~= nil and RfModes.isXband(rfmd)
 end
 
 -- ============================================================================
@@ -279,6 +301,27 @@ end
 -- speeds up per widget
 local SAMPLE_INTERVAL = 3
 
+-- 1 or 2; nil while the base is unknown
+local function decodeAnt(raw)
+  if raw == nil or not crsf.hasTelemetry then
+    return nil -- not streaming reads 0
+  end
+  if raw == 0 then
+    Telemetry._antBase = 0
+  elseif raw == 2 then
+    Telemetry._antBase = 1
+  end
+  local base = Telemetry._antBase
+  if base == nil then
+    return nil
+  end
+  local ant = raw - base + 1
+  if ant ~= 1 and ant ~= 2 then
+    return nil
+  end
+  return ant
+end
+
 -- Call after drain() so hasTelemetry is current
 function Telemetry.update()
   local now = getTime()
@@ -294,7 +337,7 @@ function Telemetry.update()
   link.rssi2 = crsf.getSensorValue("2RSS")
   link.rqly = crsf.getSensorValue("RQly")
   link.rsnr = crsf.getSensorValue("RSNR")
-  link.ant = crsf.getSensorValue("ANT")
+  link.ant = decodeAnt(crsf.getSensorValue("ANT"))
   link.tqly = crsf.getSensorValue("TQly")
   link.trss = crsf.getSensorValue("TRSS")
   link.vbat = crsf.getSensorValue("RxBt")
