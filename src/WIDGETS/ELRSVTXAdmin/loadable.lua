@@ -265,8 +265,16 @@ local function process6Pos()
     return
   end
 
-  -- Latch only once writable, or the edge is lost for every instance.
-  -- This also applies the boot position on the first ready tick.
+  -- First reading after boot or a source change: record it, don't retune.
+  -- The switch may boot on position 1; the module keeps the real channel.
+  if PresetsStorage.source ~= latch.sourceSeen then
+    latch.sourceSeen = PresetsStorage.source
+    latch.lastPos = pos
+    latch.lastCollection = PresetsStorage.collection
+    return
+  end
+
+  -- Latch only once writable, or the edge is lost for every instance
   if not VTXAdmin.isReady() then
     return
   end

@@ -35,6 +35,7 @@ local PresetsStorage = {
   -- Not persisted; shared so each edge is consumed once per radio
   latch = {
     lastPos = -1, -- last consumed 6POS position
+    sourceSeen = 0, -- source lastPos came from
     lastCollection = -1,
     stablePos = -1, -- debounce candidate
     stableTime = 0,
