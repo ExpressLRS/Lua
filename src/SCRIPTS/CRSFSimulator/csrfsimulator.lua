@@ -19,6 +19,7 @@ local shim = loadScript("/SCRIPTS/CRSFSimulator/shim.lua")()
 --   armed              armed warning flag
 --   single_antenna     2RSS pinned to 0 (no diversity)
 --   flrc               F1000, RSNR always 0
+--   xband              X150: 1RSS sub-GHz, 2RSS 2.4 GHz
 --   unrated_rate       no published sensitivity; floor-based UI must fall back
 --   slow_loading       PARAMETER_READ answers delayed ~2 s each
 --   no_module          no CRSF module
@@ -977,6 +978,7 @@ local function getElrsFlags()
     or config.scenario == "weak_link"
     or config.scenario == "unrated_rate"
     or config.scenario == "flrc"
+    or config.scenario == "xband"
   then
     flags = 0x01 -- connected
   else
@@ -1438,6 +1440,25 @@ local scenarioTelemetry = {
     Alt = 85,
     GPS = { lat = 54.7050, lon = 25.3100 },
   },
+  -- X150 (v4 index 101)
+  xband = {
+    TPWR = 100,
+    RFMD = 101,
+    ["1RSS"] = -84,
+    ["2RSS"] = -96,
+    RQly = 100,
+    RSNR = 6,
+    ANT = 0,
+    TQly = 100,
+    TRSS = -90,
+    RxBt = 16.4,
+    Curr = 8.0,
+    FM = "ANGL",
+    Sats = 14,
+    GSpd = 18.0,
+    Alt = 120,
+    GPS = { lat = 54.6872, lon = 25.2797 },
+  },
   -- F1000 (v3 index 13)
   flrc = {
     TPWR = 250,
@@ -1637,6 +1658,9 @@ local sensorToggle = {
   },
   single_antenna = {
     ["2RSS"] = { 0 },
+  },
+  xband = {
+    ANT = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1 }, -- mostly sub-GHz first
   },
   flrc = {
     RSNR = { 0 },
