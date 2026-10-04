@@ -274,6 +274,20 @@ function FullScreenUI.build()
     PresetsStorage.save()
   end, lvgl.SRC_STICK + lvgl.SRC_POT + lvgl.SRC_SWITCH)
 
+  createToggleRow(
+    fields,
+    "Apply at Startup",
+    function()
+      return PresetsStorage.applyOnStart and 1 or 0
+    end,
+    function(v)
+      PresetsStorage.applyOnStart = (v == 1)
+      PresetsStorage.save()
+    end,
+    nil,
+    "Apply the current 6POS preset to the VTX when the model loads. Leave off if your 6POS resets to position 1 at power-on."
+  )
+
   createToggleRow(fields, "Auto Push to VTX", function()
     return PresetsStorage.autoPushVtx and 1 or 0
   end, function(v)

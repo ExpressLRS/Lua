@@ -265,8 +265,19 @@ local function process6Pos()
     return
   end
 
-  -- Latch only once writable, or the edge is lost for every instance.
-  -- This also applies the boot position on the first ready tick.
+  -- First reading after boot or a source change: record it, don't retune,
+  -- unless Apply at Startup. The switch may boot on position 1.
+  if PresetsStorage.source ~= latch.sourceSeen then
+    latch.sourceSeen = PresetsStorage.source
+    latch.lastCollection = PresetsStorage.collection
+    if not PresetsStorage.applyOnStart then
+      latch.lastPos = pos
+      return
+    end
+    latch.lastPos = -1
+  end
+
+  -- Latch only once writable, or the edge is lost for every instance
   if not VTXAdmin.isReady() then
     return
   end
@@ -275,6 +286,8 @@ local function process6Pos()
   if pos == latch.lastPos and PresetsStorage.collection == latch.lastCollection then
     return
   end
+  -- Push the startup apply: the link may already be up
+  local first = latch.lastPos == -1
   latch.lastPos = pos
   latch.lastCollection = PresetsStorage.collection
 
@@ -285,7 +298,7 @@ local function process6Pos()
   end
 
   VTXAdmin.applyPreset(preset.band, preset.channel)
-  if PresetsStorage.autoPushVtx then
+  if PresetsStorage.autoPushVtx or first then
     VTXAdmin.pushToVtx()
   end
 end
