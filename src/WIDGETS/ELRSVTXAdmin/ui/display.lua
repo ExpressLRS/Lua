@@ -113,7 +113,7 @@ function VTXDisplay.heroColor()
   if VTXAdmin.state.pitmode then
     return RED
   end
-  return COLOR_THEME_FOCUS
+  return COLOR_THEME_SECONDARY1
 end
 
 --- "" without power: ExpressLRS hides pit mode then.
