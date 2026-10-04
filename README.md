@@ -7,16 +7,6 @@ This repository is home to the ExpressLRS Lua tool scripts for module configurat
 * Delete any old ELRS scripts (`elrs.lua`, `elrsV2.lua`, `elrsV3.lua` and their `.luac` counterparts) from `SCRIPTS/TOOLS/`
 * Copy the contents of the `src/` directory to the **root** of your radio's SD card, preserving the directory structure and overwriting any existing files
 
-### Install with edgetx-cli
-
-You can also install this package using [edgetx-cli](https://github.com/jurgelenas/edgetx-cli):
-
-```sh
-edgetx-cli pkg install ExpressLRS/Lua
-```
-
-Use the `--eject` flag to automatically unmount the SD card after installation.
-
 ## ExpressLRS Configuration Tool
 
 The main tool (`ExpressLRS`) lets you configure your ExpressLRS transmitter and receiver settings, adding native GUI controls for radios that support them and falling back to the traditional text display for B&W radios.
