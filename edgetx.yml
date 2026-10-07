@@ -16,6 +16,7 @@ package:
     - screenshots/tool_bind.png
     - screenshots/tool_bind_bw.png
     - screenshots/widget_telemetry_fullscren.png
+    - screenshots/telemetry_bw.png
     - screenshots/widget_vtxadmin_fullscreen.png
     - screenshots/telemetry_vtxadmin_bw.png
     - screenshots/widgets.png
@@ -62,6 +63,11 @@ widgets:
       - ELRS
 
 telemetry:
+  - name: ELRTLM
+    path: SCRIPTS/TELEMETRY/ELRTLM.lua
+    depends:
+      - ELRS
+
   - name: ELRVTX
     path: SCRIPTS/TELEMETRY/ELRVTX.lua
     depends:
