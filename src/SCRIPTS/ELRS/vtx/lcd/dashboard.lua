@@ -1,6 +1,5 @@
 ---------------------------------------------------------------------------
 -- B&W VTX Admin Dashboard                                               --
--- Loaded via loadScript() with (VTXAdmin, PresetsStorage, labels).      --
 ---------------------------------------------------------------------------
 
 local VTXAdmin, PresetsStorage, labels = ...

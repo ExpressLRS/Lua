@@ -1,7 +1,5 @@
 ---------------------------------------------------------------------------
 -- VTX Admin 6POS Preset Storage                                         --
--- Loaded via loadScript("/SCRIPTS/ELRS/vtx/presets.lua")                --
--- (FileStorage); shared by every VTX Admin instance.                    --
 ---------------------------------------------------------------------------
 
 local FileStorage = ...

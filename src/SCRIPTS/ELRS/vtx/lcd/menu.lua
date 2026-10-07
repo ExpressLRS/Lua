@@ -1,8 +1,5 @@
 ---------------------------------------------------------------------------
 -- B&W VTX Admin Menu                                                    --
--- Loaded via loadScript() with (VTXAdmin, PresetsStorage, labels) on    --
--- ENTER, dropped on exit. run(event) returns true when closed.          --
--- Rows are plain data, not closures: memory is tight here.              --
 ---------------------------------------------------------------------------
 
 local VTXAdmin, PresetsStorage, labels = ...
@@ -95,7 +92,6 @@ local function write(row, v)
   end
 end
 
---- Sticks, pots and physical switches incl. groups; lvgl.source's filter.
 local function buildSources()
   srcIds, srcStart, srcGroup = { 0 }, {}, {}
   for id in sources(MIXSRC_FIRST_INPUT, MIXSRC_MIN - 1) do
@@ -118,8 +114,6 @@ local function buildSources()
   end
 end
 
---- Largest move since editing began; a switch turning on beats one turning
---- off, since a group switches both. preferGroup: a moved group wins.
 local function movedSource(preferGroup)
   local best, bestScore
   for i = 2, #srcIds do

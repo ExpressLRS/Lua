@@ -1,8 +1,6 @@
 ---------------------------------------------------------------------------
 -- VTX Administrator Core                                                --
 -- Client of the module's VTX Admin folder, plus 6POS automation.        --
--- Loaded via loadScript("/SCRIPTS/ELRS/vtx/admin.lua")                  --
--- (crsf, CRSFSession, PresetsStorage); one instance per consumer.       --
 ---------------------------------------------------------------------------
 
 local crsf, CRSFSession, PresetsStorage = ...

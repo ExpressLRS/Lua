@@ -1,7 +1,5 @@
 ---------------------------------------------------------------------------
 -- VTX Administrator Widget - Loadable                                   --
--- Loaded via loadScript() from ELRSVTXAdmin/main.lua; screen UIs over   --
--- a per-instance VTXAdmin core (/SCRIPTS/ELRS/vtx/admin.lua).           --
 ---------------------------------------------------------------------------
 
 local zone, options, crsf, CRSFSession, PresetsStorage = ...
