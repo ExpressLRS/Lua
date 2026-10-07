@@ -1,15 +1,12 @@
 ---------------------------------------------------------------------------
 -- ELRS Telemetry State                                                  --
--- Loaded via loadScript() from ELRSTelemetry/main.lua with (crsf);      --
--- returns the Telemetry singleton.                                      --
---                                                                       --
 -- Shared by all widget instances. Each instance gets its own copy of    --
 -- every frame, so frame handlers must only assign, never count.         --
 ---------------------------------------------------------------------------
 
 local crsf = ...
 
-local RfModes = loadScript("/WIDGETS/ELRSTelemetry/rf_modes.lua")()
+local RfModes = loadScript("/SCRIPTS/ELRS/telemetry/rf_modes.lua")()
 
 local Telemetry = {}
 

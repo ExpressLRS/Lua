@@ -1,8 +1,5 @@
 ---------------------------------------------------------------------------
 -- ELRS RF Mode Tables                                                   --
--- Loaded via loadScript() from ELRSTelemetry/telemetry.lua with no      --
--- arguments; returns the RfModes table.                                 --
---                                                                       --
 -- Packet-rate names and sensitivity floors per ELRS major version.      --
 -- RFMD is 0-based; callers pass the raw sensor value.                   --
 ---------------------------------------------------------------------------
@@ -161,7 +158,7 @@ end
 
 function RfModes.name(rfmd)
   local names = RfModes._names
-  return (names and names[rfmd + 1]) or table.concat({ "RFMD", tostring(rfmd) })
+  return (names and names[rfmd + 1]) or ("RFMD" .. rfmd)
 end
 
 function RfModes.floor(rfmd)

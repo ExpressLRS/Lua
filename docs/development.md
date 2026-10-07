@@ -60,13 +60,16 @@ The telemetry widget, `WIDGETS/ELRSTelemetry/`:
 | Module | Purpose |
 |--------|---------|
 | `main.lua` | Entry point and the EdgeTX widget descriptor. Bootstraps the singletons into globals and resets the model-scoped state when the model changes |
-| `telemetry.lua` | Everything the widget knows about the link, in one owner: the frame drain, the DEVICE_INFO cache, the model-match status and the rules for when it may be asked for, the per-tick sensor snapshot, and every value derived from it. The only file in the widget that sees `crsf` |
-| `rf_modes.lua` | Packet-rate names and rated RSSI floors, keyed by the module's firmware major version. Pure data plus its selector, apart from the policy because it versions on ExpressLRS's release clock |
 | `loadable.lua` | One per placed widget: picks the layout for the screen, wires the components, drives them from the widget callbacks. Owns no state |
 | `ui/display.lua` | The read model: zero-argument formatters the layouts pass to LVGL as `text`/`color` callbacks, plus `WidgetLayout`. The whole vocabulary the view has |
 | `ui/fullscreen.lua` | The full-screen page, one layout for every screen size. Loaded on first entry |
 | `ui/<screen>.lua` | Minimized layout per screen size, each with its own breakpoints, fonts and height tiers |
 | `ui/topbar.lua` | Top-bar layout, shared by every screen file |
+
+Its domain lives in the library so the B&W telemetry screen can share it: `SCRIPTS/ELRS/telemetry/state.lua`
+is the link state and `telemetry/rf_modes.lua` its rate tables. The B&W counterpart is the telemetry
+script `SCRIPTS/TELEMETRY/ELRTLM.lua`: it drains and samples from `background()`, `run()` draws
+`telemetry/lcd/dashboard.lua`, and ENTER loads the `telemetry/lcd/details.lua` list, released on exit.
 
 `WIDGETS/ELRSVTXAdmin/` has the same shape. Its domain lives in the library so the B&W telemetry
 screen can share it: `SCRIPTS/ELRS/vtx/admin.lua` is loaded once per instance (a config client, not
@@ -84,7 +87,7 @@ another; shared *presentation* goes in `ui/display.lua` instead. And no `ui/` fi
 transport: the view asks the read model, which asks the domain.
 
 The telemetry widget's state is shared by every instance of it, because it describes the radio's link
-rather than a widget. That costs three things, all stated in `telemetry.lua`'s header: `drain()` runs
+rather than a widget. That costs three things, all stated in `state.lua`'s header: `drain()` runs
 per instance and ungated (each instance owns a firmware pop queue only it can empty), `update()`
 samples at most once per tick (or the range smoother steps once per instance per frame), and the frame
 handlers stay pure assignment (every instance is delivered its own copy of each frame, so the
@@ -106,6 +109,9 @@ The tools build on the shared `SCRIPTS/ELRS/` library, which the widgets use too
 | `SCRIPTS/ELRS/edgetx_version.lua` | The one home of the minimum EdgeTX requirement (2.11.6 / 2.12.1 / 3.0). Each tool's `main.lua` checks it once and hands `deps.versionOk` and the `REQUIRED_VERSIONS` dialog lines (`deps.requiredVersions`) to its UI chunk, whose `preCheck` owns the presentation. Keep `min_edgetx_version` in `edgetx.yml` in step |
 | `SCRIPTS/ELRS/sensors.lua` | Generic EdgeTX telemetry reader (`getSensorValue` with a cached name-to-ID lookup), not CRSF-specific. Loaded by `crsf.lua`, which exposes it to every consumer as `crsf.getSensorValue`. A cached ID addresses a slot in the model that was loaded when it was resolved, so a consumer that survives a model change must call `crsf.resetSensorCache()` on that edge |
 | `SCRIPTS/ELRS/file_storage.lua` | Generic key=value file persistence (`read`/`write`), schema-free. Loaded by VTX Admin and the bind tool |
+| `SCRIPTS/ELRS/telemetry/state.lua` | Everything known about the link, in one owner: the frame drain, the DEVICE_INFO cache, the model-match status and the rules for when it may be asked for, the per-tick sensor snapshot, and every value derived from it. A singleton shared by every telemetry widget instance; loaded once by `ELRTLM` |
+| `SCRIPTS/ELRS/telemetry/rf_modes.lua` | Packet-rate names and rated RSSI floors, keyed by the module's firmware major version. Pure data plus its selector, apart from the policy because it versions on ExpressLRS's release clock |
+| `SCRIPTS/ELRS/telemetry/lcd/dashboard.lua`, `details.lua` | The telemetry screen's dashboard (LQ, bars, signal, power, battery) and its scrolling list of every reading |
 | `SCRIPTS/ELRS/vtx/admin.lua` | VTX Admin domain: discovers the module's VTX Admin folder, parses its name into state, stages writes (`writeConfig`) and sends them (`pushToVtx`), and runs the 6POS and push-trigger automation. One per widget instance or telemetry script |
 | `SCRIPTS/ELRS/vtx/presets.lua` | 6POS preset collections over `file_storage.lua`, persisted to `/SCRIPTS/ELRS/vtx/presets.txt` |
 | `SCRIPTS/ELRS/vtx/lcd/dashboard.lua`, `menu.lua` | The VTX Admin telemetry screen's dashboard and its menu (VTX settings, 6POS Quick Change, Presets). Sources are picked by rotary or by moving the control |
@@ -116,7 +122,9 @@ the firmware delivers every widget instance its own copy of each incoming frame,
 instance has exactly one draining consumer**: the config tool and the VTX Admin widget drain through
 `session:drain()`, the telemetry widget through `Telemetry.drain()`, and the bind tool through
 `crsf.drain(App, App.onFrame)`. A future widget needing two consumers must pop once and route the
-frames itself. `reassemble()` callers pass the field id they
+frames itself. B&W firmware has a single queue for every script instead, so there `crsf.lua` pops
+into a short shared log and hands each consumer its own copy through a per-consumer cursor; the
+telemetry scripts share one `crsf` through the `_crsfSingleton` global for that. `reassemble()` callers pass the field id they
 are waiting for (strict), or `data[3]` to accept any field from their device (`acceptUnsolicited`,
 used by VTX Admin so sibling instances stay in sync from each other's answers).
 
