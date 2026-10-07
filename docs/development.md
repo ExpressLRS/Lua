@@ -122,7 +122,9 @@ the firmware delivers every widget instance its own copy of each incoming frame,
 instance has exactly one draining consumer**: the config tool and the VTX Admin widget drain through
 `session:drain()`, the telemetry widget through `Telemetry.drain()`, and the bind tool through
 `crsf.drain(App, App.onFrame)`. A future widget needing two consumers must pop once and route the
-frames itself. `reassemble()` callers pass the field id they
+frames itself. B&W firmware has a single queue for every script instead, so there `crsf.lua` pops
+into a short shared log and hands each consumer its own copy through a per-consumer cursor; the
+telemetry scripts share one `crsf` through the `_crsfSingleton` global for that. `reassemble()` callers pass the field id they
 are waiting for (strict), or `data[3]` to accept any field from their device (`acceptUnsolicited`,
 used by VTX Admin so sibling instances stay in sync from each other's answers).
 
