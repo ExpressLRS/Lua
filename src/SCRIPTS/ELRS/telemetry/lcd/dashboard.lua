@@ -1,6 +1,5 @@
 ---------------------------------------------------------------------------
 -- B&W Telemetry Dashboard                                               --
--- Loaded via loadScript() with (Telemetry).                             --
 ---------------------------------------------------------------------------
 
 local Telemetry = ...
@@ -67,7 +66,6 @@ local function drawHero()
   end
 end
 
---- e.g. "-85 -92 / -112dBm"
 local function signalText()
   local link = Telemetry.link
   local rssi = Telemetry.activeRssi()
