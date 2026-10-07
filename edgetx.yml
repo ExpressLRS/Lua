@@ -17,6 +17,7 @@ package:
     - screenshots/tool_bind_bw.png
     - screenshots/widget_telemetry_fullscren.png
     - screenshots/widget_vtxadmin_fullscreen.png
+    - screenshots/telemetry_vtxadmin_bw.png
     - screenshots/widgets.png
   keywords:
     - expresslrs
@@ -29,6 +30,8 @@ package:
 libraries:
   - name: ELRS
     path: SCRIPTS/ELRS
+    exclude:
+      - presets.txt
 
   - name: CRSFSimulator
     path: SCRIPTS/CRSFSimulator
@@ -57,5 +60,9 @@ widgets:
     path: WIDGETS/ELRSVTXAdmin
     depends:
       - ELRS
-    exclude:
-      - presets.txt
+
+telemetry:
+  - name: ELRVTX
+    path: SCRIPTS/TELEMETRY/ELRVTX.lua
+    depends:
+      - ELRS
