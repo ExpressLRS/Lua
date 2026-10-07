@@ -33,6 +33,10 @@ Widgets require a GUI screen. Both widgets running side-by-side on the home scre
 
 The telemetry widget (`ExpressLRS Telemetry`) displays real-time link statistics on your home screen. Larger widget sizes show more information and long press to open a fullscreen view showing all the telemetry items in a list.
 
+Black & white radios get the same telemetry as a telemetry screen: select the `ELRTLM` script on a page in Model Setup > Telemetry. The screen shows link quality, RSSI, RF mode, power and battery; press ENTER for the full list.
+
+<img src="screenshots/telemetry_bw.png" width="256" alt="ELRS telemetry screen"><br/>
+
 <img src="screenshots/widget_telemetry_fullscren.png" width="480" alt="ELRS Telemetry Widget">
 
 ## VTX Administrator Widget
