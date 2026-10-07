@@ -1,5 +1,5 @@
 *.luac
-src/WIDGETS/ELRSVTXAdmin/presets.txt
+src/SCRIPTS/ELRS/vtx/presets.txt
 src/SCRIPTS/TOOLS/ExpressLRSBind/history.txt
 bin/
 .claude/plans/

@@ -68,8 +68,15 @@ The telemetry widget, `WIDGETS/ELRSTelemetry/`:
 | `ui/<screen>.lua` | Minimized layout per screen size, each with its own breakpoints, fonts and height tiers |
 | `ui/topbar.lua` | Top-bar layout, shared by every screen file |
 
-`WIDGETS/ELRSVTXAdmin/` has the same shape, with `loadable.lua` holding the domain (it is per
-instance, being a config client rather than shared link state) and `presets_storage.lua` alongside it.
+`WIDGETS/ELRSVTXAdmin/` has the same shape. Its domain lives in the library so the B&W telemetry
+screen can share it: `SCRIPTS/ELRS/vtx/admin.lua` is loaded once per instance (a config client, not
+shared link state), and `SCRIPTS/ELRS/vtx/presets.lua` holds the 6POS presets, shared by every instance.
+
+The B&W counterpart is the telemetry script `SCRIPTS/TELEMETRY/ELRVTX.lua`. It ticks the core from
+`background()`, which the firmware runs whether or not the screen is visible, so 6POS automation keeps
+working on other screens. `run()` draws `SCRIPTS/ELRS/vtx/lcd/dashboard.lua`; ENTER loads
+`vtx/lcd/menu.lua`, which is released again on exit because a telemetry script stays resident for
+the whole session.
 
 Two rules hold across both widgets. The per-screen `ui/<screen>.lua` files are deliberately
 self-contained -- own breakpoints, own fonts, own tier builders -- so changing one screen cannot break
@@ -88,17 +95,20 @@ The tools build on the shared `SCRIPTS/ELRS/` library, which the widgets use too
 | Module | Purpose |
 |--------|---------|
 | `SCRIPTS/ELRS/crsf.lua` | CRSF constants, telemetry transport (`pop`/`drain`/`push`), module detection, derived link state (`hasTelemetry`, refreshed as a drain empties the queue), stateless frame decoders (`decodeDeviceInfo`, `decodeElrsStatus`, `isElrsV1Frame`) |
-| `SCRIPTS/ELRS/crsf_params.lua` | Opt-in parameter codec: `PARAMETER_SETTINGS_ENTRY` chunk reassembly over a caller-owned rx table and per-type decode, plus encoders that return `PARAMETER_READ`/`WRITE`, command-step and suppress-critical-errors frames for the caller to push. Loaded by the tool and the VTX Admin widget |
-| `SCRIPTS/ELRS/crsf_session.lua` | Opt-in stateful parameter client (`CRSFSession.new`, multi-instance): field store, load queue and retry scheduler, paced write queue, command state machine (one step in flight, retried when the radio's single output slot refuses it), and optional device discovery, link status and unsupported-firmware detection (ELRS 1.x, or a TX below 3.5.4). Loaded by the tool and the VTX Admin widget |
+| `SCRIPTS/ELRS/crsf_params.lua` | Opt-in parameter codec: `PARAMETER_SETTINGS_ENTRY` chunk reassembly over a caller-owned rx table and per-type decode, plus encoders that return `PARAMETER_READ`/`WRITE`, command-step and suppress-critical-errors frames for the caller to push. Loaded by the tool and VTX Admin |
+| `SCRIPTS/ELRS/crsf_session.lua` | Opt-in stateful parameter client (`CRSFSession.new`, multi-instance): field store, load queue and retry scheduler, paced write queue, command state machine (one step in flight, retried when the radio's single output slot refuses it), and optional device discovery, link status and unsupported-firmware detection (ELRS 1.x, or a TX below 3.5.4). Loaded by the tool and VTX Admin |
 | `SCRIPTS/ELRS/msp.lua` | Opt-in MSP-over-CRSF codec: stateless encoders returning `(frameType, payload)` for `MSP_REQ`/`MSP_WRITE` and decoders for single-frame v1 `MSP_RESP`, plus the ELRS `RXTX_CONFIG` UID/phrase helpers. Loaded only by the bind tool |
 | `SCRIPTS/ELRS/defer.lua` | Single-slot `setTimeout`/`poll` timer; scheduling replaces the pending callback, which is what cancels a stale retry when a new action starts. Loaded only by the bind tool |
-| `SCRIPTS/ELRS/ui/lcd/text_edit.lua` | BW text editor replicating the firmware's `editName()` model-name semantics (rotary cycles the char, ENTER advances, long ENTER toggles case or commits on a space). Loaded only by the bind tool's BW UI. `ui/<display>/` is the library's home for shared UI components, mirroring the tools' own `ui/` split |
+| `SCRIPTS/ELRS/ui/lcd/text_edit.lua` | BW text editor replicating the firmware's `editName()` model-name semantics (rotary cycles the char, ENTER advances, long ENTER toggles case or commits on a space). Loaded only by the bind tool's BW UI. `ui/<display>/` is the library's home for shared UI components (single-consumer feature UI lives with its feature, e.g. `vtx/lcd/`), mirroring the tools' own `ui/` split |
 | `SCRIPTS/ELRS/ui/lcd/dialogs.lua` | BW full-screen dialogs (MIDSIZE title, body lines, optional bottom action labels), redrawn every frame: `draw` plus the version gate and the missing-module notice. Loaded by both tools' BW UIs |
 | `SCRIPTS/ELRS/ui/lvgl/dialogs.lua` | Color-LCD dialogs: `showConfirm`/`showMessage` over the firmware popups, plus the version gate and the missing-module notice a tool raises before it has a page. Those two are terminal, so each takes the caller's `onExit` for the close box and the Exit button. Loaded by both tools' LVGL UIs; the widgets' full-screen pages reuse `noModuleChecklist` |
 | `SCRIPTS/ELRS/loader.lua` | The tools' GC-guarded script loader: a full collection before each `loadScript` keeps fresh-install compile peaks from stacking. The one part consumers bootstrap with a bare `loadScript` |
 | `SCRIPTS/ELRS/edgetx_version.lua` | The one home of the minimum EdgeTX requirement (2.11.6 / 2.12.1 / 3.0). Each tool's `main.lua` checks it once and hands `deps.versionOk` and the `REQUIRED_VERSIONS` dialog lines (`deps.requiredVersions`) to its UI chunk, whose `preCheck` owns the presentation. Keep `min_edgetx_version` in `edgetx.yml` in step |
 | `SCRIPTS/ELRS/sensors.lua` | Generic EdgeTX telemetry reader (`getSensorValue` with a cached name-to-ID lookup), not CRSF-specific. Loaded by `crsf.lua`, which exposes it to every consumer as `crsf.getSensorValue`. A cached ID addresses a slot in the model that was loaded when it was resolved, so a consumer that survives a model change must call `crsf.resetSensorCache()` on that edge |
-| `SCRIPTS/ELRS/file_storage.lua` | Generic key=value file persistence (`read`/`write`), schema-free. Loaded by the VTX Admin widget and the bind tool |
+| `SCRIPTS/ELRS/file_storage.lua` | Generic key=value file persistence (`read`/`write`), schema-free. Loaded by VTX Admin and the bind tool |
+| `SCRIPTS/ELRS/vtx/admin.lua` | VTX Admin domain: discovers the module's VTX Admin folder, parses its name into state, stages writes (`writeConfig`) and sends them (`pushToVtx`), and runs the 6POS and push-trigger automation. One per widget instance or telemetry script |
+| `SCRIPTS/ELRS/vtx/presets.lua` | 6POS preset collections over `file_storage.lua`, persisted to `/SCRIPTS/ELRS/vtx/presets.txt` |
+| `SCRIPTS/ELRS/vtx/lcd/dashboard.lua`, `menu.lua` | The VTX Admin telemetry screen's dashboard and its menu (VTX settings, 6POS Quick Change, Presets). Sources are picked by rotary or by moving the control |
 | `SCRIPTS/ELRS/shim.lua` | `table.concat` polyfill for BW radios |
 
 Frames are consumed pull-style. `crossfireTelemetryPop()` is destructive per script instance, and
