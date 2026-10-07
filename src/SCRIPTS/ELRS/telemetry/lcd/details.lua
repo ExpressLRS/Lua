@@ -1,7 +1,5 @@
 ---------------------------------------------------------------------------
 -- B&W Telemetry Details                                                 --
--- Loaded via loadScript() with (Telemetry, Dashboard) on ENTER, dropped --
--- on exit. run(event) returns true when closed.                         --
 ---------------------------------------------------------------------------
 
 local Telemetry, Dashboard = ...
@@ -115,7 +113,6 @@ local function lon()
   return Telemetry.gps and tostring(Telemetry.gps.lon)
 end
 
--- A row without a value is a section header
 local rows = {
   { "Link Status" },
   { "RF Mode", rfMode },

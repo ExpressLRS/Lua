@@ -1,8 +1,5 @@
 ---------------------------------------------------------------------------
 -- ELRS RF Mode Tables                                                   --
--- Loaded via loadScript() from telemetry/state.lua with no arguments;   --
--- returns the RfModes table.                                            --
---                                                                       --
 -- Packet-rate names and sensitivity floors per ELRS major version.      --
 -- RFMD is 0-based; callers pass the raw sensor value.                   --
 ---------------------------------------------------------------------------
