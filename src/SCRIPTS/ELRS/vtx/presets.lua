@@ -1,12 +1,14 @@
 ---------------------------------------------------------------------------
--- 6POS Preset Storage                                                   --
--- Loaded via loadScript() from ELRSVTXAdmin/main.lua with (FileStorage) --
--- and shared by every widget instance.                                  --
+-- VTX Admin 6POS Preset Storage                                         --
+-- Loaded via loadScript("/SCRIPTS/ELRS/vtx/presets.lua")                --
+-- (FileStorage); shared by every VTX Admin instance.                    --
 ---------------------------------------------------------------------------
 
 local FileStorage = ...
 
-local PATH = "/WIDGETS/ELRSVTXAdmin/presets.txt"
+local PATH = "/SCRIPTS/ELRS/vtx/presets.txt"
+
+local shim = loadScript("/SCRIPTS/ELRS/shim.lua")()
 
 -- One slot per 6POS position
 local COLLECTION_COUNT = 6
@@ -17,7 +19,7 @@ local SLOT_COUNT = 6
 local SAVE_KEYS = { "enabled", "source", "applyOnStart", "autoPushVtx", "pushSource", "collection" }
 local COLLECTION_KEYS = {}
 for c = 1, COLLECTION_COUNT do
-  COLLECTION_KEYS[c] = table.concat({ "c", c })
+  COLLECTION_KEYS[c] = shim.tableConcat({ "c", c })
   SAVE_KEYS[#SAVE_KEYS + 1] = COLLECTION_KEYS[c]
 end
 
@@ -124,9 +126,9 @@ function PresetsStorage.save()
     local slots = PresetsStorage.collections[c]
     local parts = {}
     for i = 1, SLOT_COUNT do
-      parts[i] = table.concat({ slots[i].band, ",", slots[i].channel })
+      parts[i] = shim.tableConcat({ slots[i].band, ",", slots[i].channel })
     end
-    values[COLLECTION_KEYS[c]] = table.concat(parts, ";")
+    values[COLLECTION_KEYS[c]] = shim.tableConcat(parts, ";")
   end
   FileStorage.write(PATH, SAVE_KEYS, values)
 end
