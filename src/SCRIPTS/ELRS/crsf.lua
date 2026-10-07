@@ -3,7 +3,8 @@
 --                                                                       --
 -- Protocol constants, pop/push (with the simulator mock seam) and       --
 -- link-layer decoders. Each script instance has its own frame queue on  --
--- colour radios; consumers drain theirs with CRSF.drain().              --
+-- colour radios; B&W radios have one, shared through a log here.        --
+-- Consumers drain with CRSF.drain().                                    --
 ---------------------------------------------------------------------------
 
 local shim = loadScript("/SCRIPTS/ELRS/shim.lua")()
@@ -87,11 +88,61 @@ CRSF.hasTelemetry = false
 -- Transport (setMock() swaps these in the simulator)
 -- ============================================================================
 
---- Pop one frame. consumer is only used by the simulator mock.
+-- B&W firmware has one queue for every script: consumers read a log of it
+-- through their own cursor, new ones from the tail
+local SHARED_QUEUE = lvgl == nil
+local LOG_MAX = 8 -- frames kept for a consumer that stopped draining
+local frameLog = {}
+local logHead = 0
+local logTail = 1
+local cursors = setmetatable({}, { __mode = "k" })
+
+local function pruneLog()
+  local oldest = logHead + 1
+  for _, nextIdx in pairs(cursors) do
+    if nextIdx < oldest then
+      oldest = nextIdx
+    end
+  end
+  oldest = math.max(oldest, logHead - LOG_MAX + 1)
+  for i = logTail, oldest - 1 do
+    frameLog[i] = nil
+  end
+  logTail = math.max(logTail, oldest)
+end
+
+local function sharedPop(consumer)
+  local nextIdx = math.max(cursors[consumer] or (logHead + 1), logTail)
+  if nextIdx > logHead then
+    local command, data = CRSF._popImpl(frameLog)
+    if command == nil then
+      cursors[consumer] = nextIdx
+      return nil
+    end
+    logHead = logHead + 1
+    frameLog[logHead] = { command, data }
+  end
+  cursors[consumer] = nextIdx + 1
+  local frame = frameLog[nextIdx]
+  pruneLog()
+  -- Copy: decoders convert strings in place
+  local data = {}
+  for i = 1, #frame[2] do
+    data[i] = frame[2][i]
+  end
+  return frame[1], data
+end
+
+--- Pop one frame for consumer.
 -- Link state refreshes only on an empty pop, so frames land before the flip.
 -- The TX zeroes RQly on disconnect.
 function CRSF.pop(consumer)
-  local command, data = CRSF._popImpl(consumer)
+  local command, data
+  if SHARED_QUEUE then
+    command, data = sharedPop(consumer)
+  else
+    command, data = CRSF._popImpl(consumer)
+  end
   if command == nil then
     CRSF.hasTelemetry = (CRSF.getSensorValue("RQly") or 0) > 0
   end
