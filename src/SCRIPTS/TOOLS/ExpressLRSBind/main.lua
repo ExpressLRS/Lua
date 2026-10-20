@@ -4,11 +4,12 @@
 ---- # License GPLv2: http://www.gnu.org/licenses/gpl-2.0.html               #
 ---- #########################################################################
 
-local VERSION = "r1"
 local useLvgl = (lvgl ~= nil)
 
 ---@diagnostic disable-next-line: need-check-nil
 local loader = loadScript("/SCRIPTS/ELRS/loader.lua")()
+
+local VERSION = loader("/SCRIPTS/ELRS/version.lua")
 
 local crsf = loader("/SCRIPTS/ELRS/crsf.lua")
 local msp = loader("/SCRIPTS/ELRS/msp.lua", crsf)
