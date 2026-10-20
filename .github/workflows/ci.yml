@@ -7,23 +7,78 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  check:
-    name: Lint and Typecheck
-    runs-on: ubuntu-24.04
+  build:
+    name: Check and Build
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: true
-
-      - name: Cache cargo
-        uses: actions/cache@v5
-        with:
-          path: ~/.cargo
-          key: cargo-stylua-${{ runner.os }}
 
       - name: Install tools
         run: make install-tools
 
       - name: Run checks
         run: make check
+
+      - name: Set version
+        env:
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          # On pull_request, github.sha is GitHub's temporary merge commit.
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          version="${SHA::7}"
+          if [ "$EVENT" = pull_request ]; then
+            zip_name="expresslrs-lua-pr${PR}-${version}"
+          elif [ "$GITHUB_REF" = refs/heads/master ]; then
+            zip_name=expresslrs-lua-nightly
+          else
+            zip_name="expresslrs-lua-${GITHUB_REF_NAME//\//-}-${version}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "ZIP_NAME=$zip_name" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: make build VERSION="$VERSION" ZIP_NAME="$ZIP_NAME"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ZIP_NAME }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  nightly:
+    name: Publish Nightly
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write
+    concurrency:
+      group: nightly
+      cancel-in-progress: true
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: expresslrs-lua-nightly
+          path: dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create nightly dist/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Nightly (development build)" \
+            --prerelease \
+            --latest=false \
+            --notes "**Development build, not a stable release.** Built automatically from the latest \`master\` commit ($GITHUB_SHA). It may contain unfinished or untested changes; for normal use, install the [latest release](https://github.com/$GITHUB_REPOSITORY/releases/latest).
+
+          The tools show version \`${GITHUB_SHA::7}\`. To install, extract the zip onto the SD card root."

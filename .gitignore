@@ -4,3 +4,4 @@ src/SCRIPTS/TOOLS/ExpressLRSBind/history.txt
 bin/
 .claude/plans/
 TODO.md
+dist/
