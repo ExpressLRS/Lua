@@ -17,7 +17,7 @@ local function create(zone, options)
     _crsfSingleton = getCRSF()
   end
   if not _elrsTelemetrySingleton then
-    local getTelemetry = loadScript(table.concat({ "/WIDGETS/", name, "/telemetry.lua" }))
+    local getTelemetry = loadScript("/SCRIPTS/ELRS/telemetry/state.lua")
     ---@diagnostic disable-next-line: need-check-nil
     _elrsTelemetrySingleton = getTelemetry(_crsfSingleton)
   end

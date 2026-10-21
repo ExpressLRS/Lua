@@ -6,7 +6,10 @@
 ---@diagnostic disable-next-line: need-check-nil
 local loader = loadScript("/SCRIPTS/ELRS/loader.lua")()
 
-local crsf = loader("/SCRIPTS/ELRS/crsf.lua")
+-- One per Lua state: B&W scripts share the frame queue through it
+_crsfSingleton = _crsfSingleton or loader("/SCRIPTS/ELRS/crsf.lua")
+local crsf = _crsfSingleton
+crsf.resetSensorCache() -- outlives model changes
 local params = loader("/SCRIPTS/ELRS/crsf_params.lua", crsf)
 local CRSFSession = loader("/SCRIPTS/ELRS/crsf_session.lua", crsf, params)
 local FileStorage = loader("/SCRIPTS/ELRS/file_storage.lua")
