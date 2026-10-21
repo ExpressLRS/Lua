@@ -381,6 +381,15 @@ function CRSFSession:reloadAll()
   params.resetChunks(self.rx)
 end
 
+--- Drop all stored fields except the given ids; frees discovery leftovers.
+function CRSFSession:retainFields(ids)
+  local kept = {}
+  for _, id in ipairs(ids) do
+    kept[id] = self._fields[id]
+  end
+  self._fields = kept
+end
+
 function CRSFSession:reloadField(field)
   self._nextReadAt = 0
   params.resetChunks(self.rx)
