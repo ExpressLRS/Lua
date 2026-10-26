@@ -5,7 +5,7 @@
 ---- #                                                                       #
 ---- # License GPLv2: http://www.gnu.org/licenses/gpl-2.0.html               #
 ---- #                                                                       #
----- # Unified tool for BW and color LCD radios (EdgeTX 2.11.6+/2.12.1+)     #
+---- # Unified tool for BW and color LCD radios (EdgeTX 2.12.1+)             #
 ---- #########################################################################
 
 local useLvgl = (lvgl ~= nil)

@@ -45,8 +45,8 @@ The VTX Administrator widget (`ExpressLRS VTX Admin`) is a shortcut for editing 
 
 | Radio type | Firmware | ExpressLRS |
 |------------|----------|------------|
-| Black & white LCD | EdgeTX 2.11.6+, 2.12.1+, or 3.0+ | v3.5.4+ |
-| Color LCD | EdgeTX 2.11.6+, 2.12.1+, or 3.0+ | v3.5.4+ |
+| Black & white LCD | EdgeTX 2.12.1+ or 3.0+ | v3.5.4+ |
+| Color LCD | EdgeTX 2.12.1+ or 3.0+ | v3.5.4+ |
 
 The bind phrase manager additionally requires **ExpressLRS 4.1+**
 
