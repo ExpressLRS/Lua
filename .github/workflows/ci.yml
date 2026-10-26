@@ -81,4 +81,4 @@ jobs:
             --latest=false \
             --notes "**Development build, not a stable release.** Built automatically from the latest \`master\` commit ($GITHUB_SHA). It may contain unfinished or untested changes; for normal use, install the [latest release](https://github.com/$GITHUB_REPOSITORY/releases/latest).
 
-          The tools show version \`${GITHUB_SHA::7}\`. To install, extract the zip onto the SD card root."
+          The tools show version \`${GITHUB_SHA::7}\`. To install, extract \`expresslrs-lua-nightly.zip\` onto the SD card root. Older EdgeTX, OpenTX or low-RAM radios: use \`expresslrs-lua-legacy.zip\` instead."

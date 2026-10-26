@@ -1,6 +1,8 @@
 SRC_DIR := src
 DIST_DIR := dist
 STAGE_DIR := $(DIST_DIR)/sdcard
+LEGACY_STAGE_DIR := $(DIST_DIR)/legacy
+LEGACY_ZIP_NAME := expresslrs-lua-legacy
 # Shown in the tools: at most 8 characters fit the B&W EXIT labels.
 VERSION ?= $(or $(shell git rev-parse HEAD 2>/dev/null | cut -c1-7),dev)
 ZIP_NAME ?= expresslrs-lua-$(VERSION)
@@ -32,7 +34,7 @@ help:
 	@echo "  format-check    Check formatting without modifying files"
 	@echo "  typecheck       Run lua-language-server type checking"
 	@echo "  check           Run format-check and typecheck"
-	@echo "  build           Build an SD card zip with compiled bytecode (VERSION=, ZIP_NAME=)"
+	@echo "  build           Build the SD card zip with compiled bytecode (VERSION=, ZIP_NAME=) and the legacy zip"
 	@echo "  sync            Sync source files to EdgeTX simulator SD card"
 	@echo "  push            Install package to EdgeTX radio and eject"
 
@@ -76,6 +78,10 @@ build:
 	find $(STAGE_DIR) -name '*.lua' | while read -r f; do $(LUAC) -s -o "$${f}c" "$$f" || exit 1; done
 	cd $(STAGE_DIR) && zip -q -r ../$(ZIP_NAME).zip SCRIPTS WIDGETS
 	@echo "Built $(DIST_DIR)/$(ZIP_NAME).zip (version $(VERSION))"
+	mkdir -p $(LEGACY_STAGE_DIR)/SCRIPTS/TOOLS
+	cp legacy/elrs.lua $(LEGACY_STAGE_DIR)/SCRIPTS/TOOLS/
+	cd $(LEGACY_STAGE_DIR) && zip -q -r ../$(LEGACY_ZIP_NAME).zip SCRIPTS
+	@echo "Built $(DIST_DIR)/$(LEGACY_ZIP_NAME).zip"
 
 sync:
 	edgetx-cli dev sync ../edgetx-sdcard
