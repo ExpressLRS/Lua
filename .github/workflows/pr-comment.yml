@@ -1,0 +1,60 @@
+name: PR Build Comment
+
+# Runs in the base repository's context so it can comment on fork PRs.
+# It never checks out or runs PR code.
+on:
+  workflow_run:
+    workflows: [ CI ]
+    types: [ completed ]
+
+permissions:
+  actions: read
+  pull-requests: write
+
+jobs:
+  comment:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Post build comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          marker='<!-- expresslrs-lua-build -->'
+
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
+            --json number,headRefOid --jq ".[] | select(.headRefOid == \"$SHA\") | .number" | head -n 1)
+          if [ -z "$pr" ]; then
+            echo "No open PR for $SHA"
+            exit 0
+          fi
+
+          if [ "$CONCLUSION" = success ]; then
+            artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
+              --jq '.artifacts[] | select(.name | startswith("expresslrs-lua-")) | "\(.id) \(.name)"' | head -n 1)
+            read -r artifact_id artifact_name <<< "$artifact"
+            body="$marker
+          ### Test build for ${SHA::7}
+
+          - Download: [$artifact_name.zip](https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts/$artifact_id) (requires a GitHub login; extract it, then extract the inner zip onto the SD card root). The tools show version \`${SHA::7}\`.
+          - Or install from source with: \`edgetx-cli pkg install $HEAD_REPO@$HEAD_BRANCH\` (shows version \`dev\`)"
+          else
+            body="$marker
+          ### Build failed for ${SHA::7}
+
+          See the [CI run]($RUN_URL)."
+          fi
+
+          comment_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$pr/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body" > /dev/null
+          else
+            gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body "$body"
+          fi
