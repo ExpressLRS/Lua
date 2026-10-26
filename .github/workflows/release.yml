@@ -43,9 +43,20 @@ jobs:
           if prev=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$GITHUB_REF_NAME^" 2>/dev/null); then
             args+=(--notes-start-tag "$prev")
           fi
+          notes=$(cat <<EOF
+          | Radio | Download |
+          |-------|----------|
+          | EdgeTX 2.12.1+ or 3.0+ | \`expresslrs-lua-$GITHUB_REF_NAME.zip\` |
+          | Older EdgeTX, OpenTX or low-RAM radios | \`expresslrs-lua-legacy.zip\` |
+
+          Extract the zip onto the SD card root. The new scripts require ExpressLRS 3.5.4+; use the legacy zip for older modules.
+          EOF
+          )
+          # --notes is placed before the generated notes.
           gh release create "$GITHUB_REF_NAME" dist/*.zip \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
+            --notes "$notes" \
             --generate-notes \
             --latest \
             "${args[@]}"
