@@ -8,11 +8,12 @@
 ---- # Unified tool for BW and color LCD radios (EdgeTX 2.11.6+/2.12.1+)     #
 ---- #########################################################################
 
-local VERSION = "r3"
 local useLvgl = (lvgl ~= nil)
 
 ---@diagnostic disable-next-line: need-check-nil
 local loader = loadScript("/SCRIPTS/ELRS/loader.lua")()
+
+local VERSION = loader("/SCRIPTS/ELRS/version.lua")
 
 local crsf = loader("/SCRIPTS/ELRS/crsf.lua")
 local params = loader("/SCRIPTS/ELRS/crsf_params.lua", crsf)
