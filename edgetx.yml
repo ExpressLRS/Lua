@@ -24,7 +24,7 @@ package:
     - telemetry
   license: GPL-3.0-only
   source_dir: src
-  min_edgetx_version: "2.11.6"
+  min_edgetx_version: "2.12.1"
 
 libraries:
   - name: ELRS
