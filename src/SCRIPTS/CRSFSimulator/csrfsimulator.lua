@@ -934,6 +934,7 @@ updateVtxAdminOpts(txDevice)
 
 local reconnectDelay = 500 -- 5 s
 local startTime = nil -- first push/pop
+local lastPushAt = nil
 local mismatchClearDelay = 1000 -- 10 s
 
 local function isRxAvailable()
@@ -1113,9 +1114,17 @@ end
 -- ============================================================================
 
 local function mockPush(command, data)
+  local now = getTime()
   if not startTime then
-    startTime = getTime()
+    startTime = now
   end
+
+  -- EdgeTX holds one outbound frame until the next CRSF pulse sends it
+  if now == lastPushAt then
+    print(shim.tableConcat({ "CRSFSIM push busy t=", now, " cmd=", command, " field=", data and data[3] or "-" }))
+    return false
+  end
+  lastPushAt = now
 
   -- One log line per frame so tests can count wire traffic
   print(shim.tableConcat({
