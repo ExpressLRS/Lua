@@ -21,7 +21,7 @@ local MOVE_THRESHOLD = 300 -- under one step of a 6-switch group
 local d = VTXAdmin.desired
 local PS = PresetsStorage
 
-local BAND_NAMES = { "Off", "A", "B", "E", "F", "R", "L" }
+local BAND_NAMES = { "Disabled", "A", "B", "E", "F", "R", "L" }
 local POWER_NAMES = { "-", "1", "2", "3", "4", "5", "6", "7", "8" }
 
 local quickChangeRows = {
@@ -40,10 +40,10 @@ for i = 1, 6 do
 end
 
 local rootRows = {
-  { kind = NUMBER, label = "Band", key = "band", vtx = true, min = 0, max = 6, names = BAND_NAMES },
+  { kind = NUMBER, label = "Band/Enable", key = "band", vtx = true, min = 0, max = 6, names = BAND_NAMES },
   { kind = NUMBER, label = "Channel", key = "channel", vtx = true, min = 1, max = 8 },
   { kind = NUMBER, label = "Power Level", key = "power", vtx = true, min = 0, max = 8, names = POWER_NAMES },
-  { kind = TOGGLE, label = "Pit Mode", key = "pitmode", vtx = true },
+  { kind = TOGGLE, label = "Pitmode", key = "pitmode", vtx = true },
   { kind = SEND },
   { kind = FOLDER, label = "6POS Quick Change", page = { title = "6POS Quick Change", rows = quickChangeRows } },
   { kind = FOLDER, label = "Presets", page = { title = "Presets", rows = presetRows } },
