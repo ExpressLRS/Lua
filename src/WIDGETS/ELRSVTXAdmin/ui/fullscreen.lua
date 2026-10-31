@@ -107,8 +107,8 @@ local function createChoiceRow(container, label, values, getFn, setFn, hint)
   })
 end
 
-local function createNumberRow(container, label, min, max, getFn, setFn, editedFn, displayFn)
-  local ctrl = createRow(container, label)
+local function createNumberRow(container, label, min, max, getFn, setFn, editedFn, displayFn, visibleFn)
+  local ctrl = createRow(container, label, nil, visibleFn)
   ctrl:numberEdit({
     min = min,
     max = max,
@@ -198,6 +198,11 @@ function FullScreenUI.build()
 
   createSectionHeader(fields, "VTX Settings")
 
+  -- ExpressLRS hides channel, power and pit mode while the band is Disabled
+  local function enabled()
+    return d.band > 0
+  end
+
   createChoiceRow(fields, "Band/Enable", { "Disabled", "A", "B", "E", "F", "R", "L" }, function()
     return d.band + 1
   end, function(idx)
@@ -212,7 +217,7 @@ function FullScreenUI.build()
   end, function(v)
     d.channel = v
     VTXAdmin.writeConfig()
-  end)
+  end, nil, enabled)
 
   createNumberRow(fields, "Power Level", 0, 8, function()
     return d.power
@@ -223,16 +228,16 @@ function FullScreenUI.build()
     VTXAdmin.writeConfig()
   end, function(v)
     return v == 0 and "-" or tostring(v)
-  end)
+  end, enabled)
 
-  -- ExpressLRS hides pit mode while power is "-"
+  -- ...and pit mode while power is "-"
   createToggleRow(fields, "Pitmode", function()
     return d.pitmode
   end, function(v)
     d.pitmode = v
     VTXAdmin.writeConfig()
   end, function()
-    return d.power > 0
+    return enabled() and d.power > 0
   end)
 
   local sendWrapper = fields:box({

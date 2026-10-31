@@ -63,7 +63,8 @@ local VTXAdmin = {
 
 --- Parse "VTX Admin (BAND:CHANNEL[:POWER[:PITMODE]])" into state.
 --- PITMODE is "P", or an aux label plus up/down arrow when switch-bound.
---- Band Off drops the suffix, power "-" drops power and pit mode.
+--- Band Off drops the suffix, power "-" drops power and pit mode. Off keeps the
+--- last channel and power: the module still holds them.
 --- Aux binding sets pitmodeAux only: the name never has the switch position.
 local function parseFolderName(name)
   local s = VTXAdmin.state
@@ -71,10 +72,6 @@ local function parseFolderName(name)
   if not content then
     s.band = 0
     s.bandLetter = "Off"
-    s.channel = 0
-    s.power = 0
-    s.pitmode = false
-    s.pitmodeAux = nil
     return true
   end
 
@@ -197,14 +194,22 @@ local function onField(field)
       VTXAdmin.statusText = "VTX Admin not found"
     end
   elseif VTXAdmin.phase == VTXAdmin.PHASE_DISCOVER_VTX then
+    -- Band Off: the folder name had none of these, the fields still do
+    local s = VTXAdmin.state
+    local off = s.band == 0
     if fieldName == "Band" or fieldName == "Band/Enable" then
       VTXAdmin.ids.band = fieldId
     elseif fieldName == "Channel" then
       VTXAdmin.ids.channel = fieldId
+      s.channel = off and field.value or s.channel
     elseif fieldName == "Pwr Lvl" then
       VTXAdmin.ids.power = fieldId
+      s.power = off and field.value or s.power
     elseif fieldName == "Pitmode" then
       VTXAdmin.ids.pitmode = fieldId
+      if off then
+        s.pitmode = field.value == 1
+      end
     elseif fieldName == "Send VTx" then
       VTXAdmin.ids.send = fieldId
     end
@@ -229,6 +234,8 @@ local function onField(field)
   elseif VTXAdmin.phase == VTXAdmin.PHASE_READY then
     if fieldId == VTXAdmin.ids.folder then
       parseFolderName(fieldName)
+      -- Picks up changes made elsewhere, e.g. in the ExpressLRS tool
+      VTXAdmin.syncDesiredFromState()
     end
   end
 end

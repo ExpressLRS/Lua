@@ -143,8 +143,10 @@ end
 local function visibleRows()
   local rows = {}
   for _, row in ipairs(page.rows) do
-    -- ExpressLRS hides pit mode while power is "-"
-    if row.key ~= "pitmode" or d.power > 0 then
+    -- ExpressLRS hides these while the band is Disabled, pit mode also while power is "-"
+    local key = row.key
+    local hidden = d.band == 0 and (key == "channel" or key == "power" or key == "pitmode")
+    if not hidden and (key ~= "pitmode" or d.power > 0) then
       rows[#rows + 1] = row
     end
   end
