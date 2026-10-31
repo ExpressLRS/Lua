@@ -285,22 +285,17 @@ local function run(event)
   for i = 1, math.min(ROW_COUNT, #rows - offset) do
     local r = rows[offset + i]
     local y = ROW_Y + (i - 1) * ROW_H
-    local rowAttr, valueAttr = 0, 0
+    local attr = 0
     if offset + i == cursor then
-      if edit then
-        valueAttr = INVERS + BLINK
-      else
-        lcd.drawFilledRectangle(0, y - 1, LCD_W, ROW_H)
-        rowAttr, valueAttr = INVERS, INVERS
-      end
+      attr = edit and INVERS + BLINK or INVERS
     end
     if r.kind == SEND then
-      lcd.drawText(LCD_W / 2, y, VTXAdmin.isSending() and "[Sending...]" or "[Send VTx]", rowAttr + BOLD + CENTER)
+      lcd.drawText(LCD_W / 2, y, VTXAdmin.isSending() and "[Sending...]" or "[Send VTx]", attr + BOLD + CENTER)
     elseif r.kind == FOLDER then
-      lcd.drawText(1, y, "> " .. r.label, rowAttr + BOLD)
+      lcd.drawText(1, y, "> " .. r.label, attr + BOLD)
     else
-      lcd.drawText(1, y, r.label, rowAttr)
-      drawValue(r, y, valueAttr)
+      lcd.drawText(1, y, r.label)
+      drawValue(r, y, attr)
     end
   end
 end
