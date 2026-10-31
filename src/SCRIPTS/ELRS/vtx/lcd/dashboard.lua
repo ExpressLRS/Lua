@@ -21,24 +21,6 @@ local function presetsShown()
   return PresetsStorage.enabled
 end
 
---- The VTX's tuning, not the switch: they differ after boot. Switch breaks ties.
-local function activePreset()
-  if not VTXAdmin.isTuned() then
-    return nil
-  end
-  local s = VTXAdmin.state
-  local items = PresetsStorage.items
-  local pos = PresetsStorage.latch.lastPos
-  if pos > 0 and items[pos].band == s.band and items[pos].channel == s.channel then
-    return pos
-  end
-  for i = 1, 6 do
-    if items[i].band == s.band and items[i].channel == s.channel then
-      return i
-    end
-  end
-end
-
 local function drawTitle()
   lcd.drawFilledRectangle(0, 0, LCD_W, TITLE_H)
   lcd.drawText(1, 1, "VTX Admin", INVERS)
@@ -48,7 +30,7 @@ local function drawTitle()
 end
 
 local function drawCells()
-  local active = activePreset()
+  local active = VTXAdmin.activePreset()
   local items = PresetsStorage.items
   for i = 1, 6 do
     local x = CELLS_X + (i - 1) * (CELL_W + CELL_GAP)

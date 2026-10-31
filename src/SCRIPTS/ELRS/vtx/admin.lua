@@ -124,6 +124,24 @@ function VTXAdmin.hasPower()
   return VTXAdmin.isTuned() and VTXAdmin.state.power > 0
 end
 
+--- The VTX's tuning, not the switch: they differ after boot. Switch breaks ties.
+function VTXAdmin.activePreset()
+  if not VTXAdmin.isTuned() then
+    return nil
+  end
+  local s = VTXAdmin.state
+  local items = PresetsStorage.items
+  local pos = PresetsStorage.latch.lastPos
+  if pos > 0 and items[pos].band == s.band and items[pos].channel == s.channel then
+    return pos
+  end
+  for i = 1, 6 do
+    if items[i].band == s.band and items[i].channel == s.channel then
+      return i
+    end
+  end
+end
+
 function VTXAdmin.syncDesiredFromState()
   local s = VTXAdmin.state
   local d = VTXAdmin.desired

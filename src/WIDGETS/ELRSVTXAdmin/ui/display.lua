@@ -243,28 +243,8 @@ function VTXDisplay.buildCells(spec)
     end
     cellW = math.min(cellW, math.max(fit, (lcd.sizeText("--", font))))
   end
-  local function matchesVtx(idx)
-    local p = PresetsStorage.items[idx]
-    local s = VTXAdmin.state
-    return p.band == s.band and p.channel == s.channel
-  end
-  -- The VTX's tuning, not the switch: they differ after boot. Switch breaks ties.
-  local function activeIdx()
-    if not VTXAdmin.isTuned() then
-      return nil
-    end
-    local pos = PresetsStorage.latch.lastPos
-    if pos > 0 and matchesVtx(pos) then
-      return pos
-    end
-    for i = 1, 6 do
-      if matchesVtx(i) then
-        return i
-      end
-    end
-  end
   local function isActive(idx)
-    return activeIdx() == idx
+    return VTXAdmin.activePreset() == idx
   end
   local function cellText(idx)
     local p = PresetsStorage.items[idx]
