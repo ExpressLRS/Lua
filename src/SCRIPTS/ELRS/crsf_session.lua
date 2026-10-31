@@ -484,17 +484,25 @@ function CRSFSession:writeField(field)
     frameType, payload = params.encodeWriteInt(self.deviceId, self.handsetId, field)
   end
 
+  self:_write(frameType, payload)
+
+  if not self._acceptUnsolicited then
+    self:_reloadRelated(field)
+  end
+end
+
+-- The radio's one Lua outbound slot may be busy; tick() retries from the queue
+function CRSFSession:_write(frameType, payload)
   local now = getTime()
-  if self._writeHead > self._writeTail and now - self._lastWriteAt >= WRITE_SPACING then
-    crsf.push(frameType, payload)
+  if
+    self._writeHead > self._writeTail
+    and now - self._lastWriteAt >= WRITE_SPACING
+    and crsf.push(frameType, payload)
+  then
     self._lastWriteAt = now
   else
     self._writeTail = self._writeTail + 1
     self._writeQueue[self._writeTail] = { frameType, payload }
-  end
-
-  if not self._acceptUnsolicited then
-    self:_reloadRelated(field)
   end
 end
 
@@ -564,7 +572,7 @@ end
 
 function CRSFSession:suppressCriticalErrors()
   self.status.flags = 0
-  crsf.push(params.encodeSuppressCriticalErrors(self.deviceId, self.handsetId))
+  self:_write(params.encodeSuppressCriticalErrors(self.deviceId, self.handsetId))
 end
 
 -- ============================================================================
@@ -608,16 +616,19 @@ function CRSFSession:tick()
   end
 
   if self._writeHead <= self._writeTail then
-    if now - self._lastWriteAt >= WRITE_SPACING then
-      local write = self._writeQueue[self._writeHead]
+    local write = self._writeQueue[self._writeHead]
+    if now - self._lastWriteAt >= WRITE_SPACING and crsf.push(write[1], write[2]) then
       self._writeQueue[self._writeHead] = nil
       self._writeHead = self._writeHead + 1
       if self._writeHead > self._writeTail then
         self._writeHead = 1
         self._writeTail = 0
       end
-      crsf.push(write[1], write[2])
       self._lastWriteAt = now
+      -- Settle from the actual send, not from when it was queued
+      if not self._acceptUnsolicited then
+        self:_afterWrite()
+      end
     end
     return
   end
