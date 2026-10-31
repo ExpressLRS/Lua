@@ -198,7 +198,7 @@ function FullScreenUI.build()
 
   createSectionHeader(fields, "VTX Settings")
 
-  createChoiceRow(fields, "Band", { "Off", "A", "B", "E", "F", "R", "L" }, function()
+  createChoiceRow(fields, "Band/Enable", { "Disabled", "A", "B", "E", "F", "R", "L" }, function()
     return d.band + 1
   end, function(idx)
     d.band = idx - 1
@@ -226,7 +226,7 @@ function FullScreenUI.build()
   end)
 
   -- ExpressLRS hides pit mode while power is "-"
-  createToggleRow(fields, "Pit Mode", function()
+  createToggleRow(fields, "Pitmode", function()
     return d.pitmode
   end, function(v)
     d.pitmode = v

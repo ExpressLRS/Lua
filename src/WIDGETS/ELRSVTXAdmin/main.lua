@@ -24,7 +24,7 @@ local function create(zone, options)
     local getFileStorage = loadScript("/SCRIPTS/ELRS/file_storage.lua")
     ---@diagnostic disable-next-line: need-check-nil
     local fileStorage = getFileStorage()
-    local getPresetsStorage = loadScript("/WIDGETS/ELRSVTXAdmin/presets_storage.lua")
+    local getPresetsStorage = loadScript("/SCRIPTS/ELRS/vtx/presets.lua")
     ---@diagnostic disable-next-line: need-check-nil
     _vtxPresetsStorage = getPresetsStorage(fileStorage)
   end
