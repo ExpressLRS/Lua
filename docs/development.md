@@ -91,7 +91,9 @@ rather than a widget. That costs three things, all stated in `state.lua`'s heade
 per instance and ungated (each instance owns a firmware pop queue only it can empty), `update()`
 samples at most once per tick (or the range smoother steps once per instance per frame), and the frame
 handlers stay pure assignment (every instance is delivered its own copy of each frame, so the
-singleton decodes each one N times on a radio and once in the simulator).
+singleton decodes each one N times on a radio and once in the simulator). ELRTLM doesn't use the
+singleton: it loads its own copy of `state.lua`, which the firmware drops with the script on every
+model load, so only the frame-handler rule applies there.
 
 The tools build on the shared `SCRIPTS/ELRS/` library, which the widgets use too:
 
@@ -109,7 +111,7 @@ The tools build on the shared `SCRIPTS/ELRS/` library, which the widgets use too
 | `SCRIPTS/ELRS/edgetx_version.lua` | The one home of the minimum EdgeTX requirement (2.12.1 / 3.0). Each tool's `main.lua` checks it once and hands `deps.versionOk` and the `REQUIRED_VERSIONS` dialog lines (`deps.requiredVersions`) to its UI chunk, whose `preCheck` owns the presentation. Keep `min_edgetx_version` in `edgetx.yml` in step |
 | `SCRIPTS/ELRS/sensors.lua` | Generic EdgeTX telemetry reader (`getSensorValue` with a cached name-to-ID lookup), not CRSF-specific. Loaded by `crsf.lua`, which exposes it to every consumer as `crsf.getSensorValue`. A cached ID addresses a slot in the model that was loaded when it was resolved, so a consumer that survives a model change must call `crsf.resetSensorCache()` on that edge |
 | `SCRIPTS/ELRS/file_storage.lua` | Generic key=value file persistence (`read`/`write`), schema-free. Loaded by VTX Admin and the bind tool |
-| `SCRIPTS/ELRS/telemetry/state.lua` | Everything known about the link, in one owner: the frame drain, the DEVICE_INFO cache, the model-match status and the rules for when it may be asked for, the per-tick sensor snapshot, and every value derived from it. A singleton shared by every telemetry widget instance; loaded once by `ELRTLM` |
+| `SCRIPTS/ELRS/telemetry/state.lua` | Everything known about the link, in one owner: the frame drain, the DEVICE_INFO cache, the model-match status and the rules for when it may be asked for, the per-tick sensor snapshot, and every value derived from it. Shared by every telemetry widget instance through `_elrsTelemetrySingleton`; `ELRTLM` loads its own copy |
 | `SCRIPTS/ELRS/telemetry/rf_modes.lua` | Packet-rate names and rated RSSI floors, keyed by the module's firmware major version. Pure data plus its selector, apart from the policy because it versions on ExpressLRS's release clock |
 | `SCRIPTS/ELRS/telemetry/lcd/dashboard.lua`, `details.lua` | The telemetry screen's dashboard (LQ, bars, signal, power, battery) and its scrolling list of every reading |
 | `SCRIPTS/ELRS/vtx/admin.lua` | VTX Admin domain: discovers the module's VTX Admin folder, parses its name into state, stages writes (`writeConfig`) and sends them (`pushToVtx`), and runs the 6POS and push-trigger automation. One per widget instance or telemetry script |
