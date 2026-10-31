@@ -92,6 +92,12 @@ local function write(row, v)
   end
 end
 
+local function captureSources()
+  for i = 2, #srcIds do
+    srcStart[i] = getValue(srcIds[i]) or 0
+  end
+end
+
 local function buildSources()
   srcIds, srcStart, srcGroup = { 0 }, {}, {}
   for id in sources(MIXSRC_FIRST_INPUT, MIXSRC_MIN - 1) do
@@ -109,24 +115,27 @@ local function buildSources()
       srcGroup[#srcIds] = not info or nil
     end
   end
-  for i = 2, #srcIds do
-    srcStart[i] = getValue(srcIds[i]) or 0
-  end
+  captureSources()
 end
 
+--- Re-captures start positions on a hit, so a held stick doesn't block the encoder.
 local function movedSource(preferGroup)
   local best, bestScore
   for i = 2, #srcIds do
     local delta = (getValue(srcIds[i]) or 0) - srcStart[i]
     if math.abs(delta) > MOVE_THRESHOLD then
       if preferGroup and srcGroup[i] then
-        return i
+        best = i
+        break
       end
       local score = math.abs(delta) * 2 + (delta > 0 and 1 or 0)
       if not bestScore or score > bestScore then
         best, bestScore = i, score
       end
     end
+  end
+  if best then
+    captureSources()
   end
   return best
 end
