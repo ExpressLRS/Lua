@@ -31,7 +31,7 @@ libraries:
   - name: ELRS
     path: SCRIPTS/ELRS
     exclude:
-      - presets.txt
+      - "**/presets.txt"
 
   - name: CRSFSimulator
     path: SCRIPTS/CRSFSimulator
