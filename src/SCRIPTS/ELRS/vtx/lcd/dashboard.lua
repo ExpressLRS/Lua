@@ -54,7 +54,7 @@ local function drawHero(top, bottom)
   end
   local s = VTXAdmin.state
   if s.band == 0 then
-    lcd.drawText(LCD_W / 2, y, "VTX Off", DBLSIZE + CENTER)
+    lcd.drawText(LCD_W / 2, y, "Disabled", DBLSIZE + CENTER)
     return
   end
   lcd.drawText(4, y, labels.preset(s.band, s.channel), DBLSIZE)

@@ -96,7 +96,7 @@ function VTXDisplay.statusText()
     return "Loading..."
   end
   if VTXAdmin.state.band == 0 then
-    return "VTX Off"
+    return "Disabled"
   end
   return ""
 end
