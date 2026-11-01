@@ -95,8 +95,9 @@ local pwmChannelConfig = {
   [4] = { inputChannel = 4, mode = 0, inverted = 0 },
 }
 
--- Firmware gives each Lua state its own frame queue: a shared log with
--- per-consumer cursors, new consumers start at the tail.
+-- Colour firmware gives each widget its own frame queue: a shared log with
+-- per-consumer cursors, new consumers start at the tail. On B&W crsf.lua
+-- pops with one key, as there the firmware has a single queue.
 
 local frameLog = {}
 local logTotal = 0

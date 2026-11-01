@@ -1,15 +1,14 @@
 ---------------------------------------------------------------------------
 -- ELRS Telemetry State                                                  --
--- Loaded via loadScript() from ELRSTelemetry/main.lua with (crsf);      --
--- returns the Telemetry singleton.                                      --
---                                                                       --
--- Shared by all widget instances. Each instance gets its own copy of    --
--- every frame, so frame handlers must only assign, never count.         --
+-- The colour widget's instances share one copy through                  --
+-- _elrsTelemetrySingleton, and each instance gets its own copy of every --
+-- frame, so frame handlers must only assign, never count. The B&W       --
+-- ELRTLM script loads its own copy, fresh on every model load.          --
 ---------------------------------------------------------------------------
 
 local crsf = ...
 
-local RfModes = loadScript("/WIDGETS/ELRSTelemetry/rf_modes.lua")()
+local RfModes = loadScript("/SCRIPTS/ELRS/telemetry/rf_modes.lua")()
 
 local Telemetry = {}
 
@@ -297,8 +296,8 @@ end
 -- Per-tick pump
 -- ============================================================================
 
--- 30 ms: dedupes instances within one 50 ms widget loop; else smoothing
--- speeds up per widget
+-- 30 ms: dedupes the colour widget's instances within one 50 ms loop;
+-- else smoothing speeds up per widget
 local SAMPLE_INTERVAL = 3
 
 -- 1 or 2; nil while the base is unknown
@@ -400,13 +399,14 @@ function Telemetry:_onFrame(command, data)
   end
 end
 
--- Every instance, every frame: each has its own queue that would overflow
+-- Every widget instance, every frame: each has its own queue that would
+-- overflow. On B&W this reads the shared log through ELRTLM's cursor.
 function Telemetry.drain()
   crsf.drain(Telemetry, Telemetry._onFrame)
 end
 
 -- ============================================================================
--- Return singleton
+-- Return module
 -- ============================================================================
 
 return Telemetry
