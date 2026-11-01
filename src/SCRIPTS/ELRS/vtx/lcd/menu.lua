@@ -45,7 +45,7 @@ local rootRows = {
   { kind = NUMBER, label = "Power Level", key = "power", vtx = true, min = 0, max = 8, names = POWER_NAMES },
   { kind = TOGGLE, label = "Pitmode", key = "pitmode", vtx = true },
   { kind = SEND },
-  { kind = FOLDER, label = "6POS Quick Change", page = { title = "6POS Quick Change", rows = quickChangeRows } },
+  { kind = FOLDER, label = "6POS Quick Change", page = { title = "Quick Change", rows = quickChangeRows } },
   { kind = FOLDER, label = "Presets", page = { title = "Presets", rows = presetRows } },
 }
 local root = { title = "VTX Admin", rows = rootRows }
