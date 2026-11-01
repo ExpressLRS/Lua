@@ -74,6 +74,7 @@ function CRSFSession.new(opts)
     _hadTelemetry = false,
     _preloadArmed = nil,
     _preloading = nil,
+    _retainedOnly = nil, -- set by retainFields(): ignore fields not kept
   }, CRSFSession)
 end
 
@@ -205,6 +206,10 @@ function CRSFSession:_onWrite(data)
 end
 
 function CRSFSession:_onEntry(data)
+  -- Before reassembly, so dropped fields' chunks are skipped too
+  if self._retainedOnly and not self._fields[data[3]] then
+    return
+  end
   local expectedId
   if self._acceptUnsolicited then
     expectedId = data[3]
@@ -374,11 +379,22 @@ end
 
 function CRSFSession:reloadAll()
   self._fields = {}
+  self._retainedOnly = nil
   self._loadQueue = { 0 }
   self._nextReadAt = 0
   self._preloadArmed = self._preload
   self._preloading = nil
   params.resetChunks(self.rx)
+end
+
+--- Drop all stored fields except the given ids; frees discovery leftovers.
+function CRSFSession:retainFields(ids)
+  local kept = {}
+  for _, id in ipairs(ids) do
+    kept[id] = self._fields[id]
+  end
+  self._fields = kept
+  self._retainedOnly = true
 end
 
 function CRSFSession:reloadField(field)

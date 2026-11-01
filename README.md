@@ -39,6 +39,10 @@ The telemetry widget (`ExpressLRS Telemetry`) displays real-time link statistics
 
 The VTX Administrator widget (`ExpressLRS VTX Admin`) is a shortcut for editing the VTX Admin settings normally accessed from the ExpressLRS tool script. It supports binding VTX channels to a 6POS for switching channels without digging into menus, with multiple profiles. Long press the widget to open the fullscreen configuration UI.
 
+Black & white radios get the same features as a telemetry screen: select the `ELRVTX` script on a page in Model Setup > Telemetry. The screen shows the current band, channel, power, pit mode and 6POS presets; press ENTER for settings.
+
+<img src="screenshots/telemetry_vtxadmin_bw.png" width="256" alt="VTX Administrator telemetry screen"><br/>
+
 <img src="screenshots/widget_vtxadmin_fullscreen.png" width="480" alt="VTX Administrator Widget">
 
 ## Compatibility

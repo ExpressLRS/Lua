@@ -6,9 +6,9 @@
 
 local function loader(path, ...)
   collectgarbage("collect")
-  local chunk = loadScript(path)
+  local chunk, err = loadScript(path)
   if chunk == nil then
-    error(path) -- names the file on the error screen
+    error(err or path) -- file and reason on the error screen
   end
   return chunk(...)
 end
