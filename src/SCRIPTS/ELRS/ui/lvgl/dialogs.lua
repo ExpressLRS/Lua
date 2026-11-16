@@ -4,10 +4,6 @@
 
 local Dialogs = {}
 
-function Dialogs.showConfirm(title, message, onConfirm)
-  return lvgl.confirm({ title = title, message = message, confirm = onConfirm })
-end
-
 function Dialogs.showMessage(title, message)
   return lvgl.message({ title = title, message = message })
 end

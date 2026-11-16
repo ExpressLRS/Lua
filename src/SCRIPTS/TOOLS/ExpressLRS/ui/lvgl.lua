@@ -319,9 +319,7 @@ end
 
 function UI.handleBack()
   if Navigation.isAtRoot() then
-    Dialogs.showConfirm("Exit", "Exit ExpressLRS Lua script?", function()
-      App.shouldExit = true
-    end)
+    exitTool()
   else
     local entry = App.goBack()
     if entry and entry.type == Navigation.TYPE_DEVICE and entry.prevDeviceId then
@@ -792,9 +790,9 @@ function UI.build()
 
   if not Navigation.isAtRoot() then
     pageOptions.backButton = true
-    pageOptions.back = function()
-      UI.handleBack()
-    end
+    -- with backButton the header icon fires menu, not back
+    pageOptions.menu = exitTool
+    pageOptions.back = UI.handleBack
   else
     pageOptions.back = UI.handleBack
   end
