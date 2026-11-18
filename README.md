@@ -5,7 +5,8 @@ This repository is home to the ExpressLRS Lua tool scripts for module configurat
 ## Installation
 
 * Delete any old ELRS scripts (`elrs.lua`, `elrsV2.lua`, `elrsV3.lua` and their `.luac` counterparts) from `SCRIPTS/TOOLS/`
-* Copy the contents of the `src/` directory to the **root** of your radio's SD card, preserving the directory structure and overwriting any existing files
+* Download `expresslrs-lua-<version>.zip` from the [latest release](https://github.com/ExpressLRS/Lua/releases/latest)
+* Extract it to the **root** of your radio's SD card, preserving the directory structure and overwriting any existing files
 
 ## ExpressLRS Configuration Tool
 
@@ -60,7 +61,7 @@ The bind phrase manager additionally requires **ExpressLRS 4.1+**
 
 ## Legacy Script
 
-[`legacy/`](legacy/) holds `elrs.lua`, the original single-file configuration tool lua meant for radios that do not support the minimum versions listed in [Compatibility](#compatibility), or do not have enough RAM to run the new tool script. Each [release](https://github.com/ExpressLRS/Lua/releases) includes it as `expresslrs-lua-legacy.zip`; extract it onto the SD card root.
+[`legacy/`](legacy/) holds `elrs.lua`, the original single-file configuration tool lua meant for radios that do not support the minimum versions listed in [Compatibility](#compatibility), or do not have enough RAM to run the new tool script. The [latest release](https://github.com/ExpressLRS/Lua/releases/latest) includes it as `expresslrs-lua-legacy.zip`; extract it onto the SD card root.
 
 ## Development
 
