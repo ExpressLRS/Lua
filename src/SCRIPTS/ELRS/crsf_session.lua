@@ -71,6 +71,8 @@ function CRSFSession.new(opts)
     _refreshLeft = 0,
     _refreshAttempts = 0,
 
+    _staleFolder = nil, -- folder above the last change; 0 is root
+
     _hadTelemetry = false,
     _preloadArmed = nil,
     _preloading = nil,
@@ -384,6 +386,7 @@ function CRSFSession:reloadAll()
   self._nextReadAt = 0
   self._preloadArmed = self._preload
   self._preloading = nil
+  self._staleFolder = nil
   params.resetChunks(self.rx)
 end
 
@@ -439,6 +442,19 @@ function CRSFSession:preloadAll()
   end
 end
 
+--- Re-reads the folder's values if a change below left them stale;
+--- folderId nil means root.
+function CRSFSession:reloadFolderIfStale(folderId)
+  if self._staleFolder ~= (folderId or 0) then
+    return
+  end
+  self._staleFolder = nil
+  self:_queueValueFields(folderId)
+  local settled = self._lastWriteAt + WRITE_SETTLE
+  self._nextReadAt = getTime() < settled and settled or 0
+  params.resetChunks(self.rx)
+end
+
 --- One-off re-read after delay ticks, attempts default 3; not for polling.
 function CRSFSession:refreshField(fieldId, delay, attempts)
   self._refreshId = fieldId
@@ -452,28 +468,35 @@ end
 -- Writing
 -- ============================================================================
 
--- Parent name may embed values; siblings can hide or change options
-function CRSFSession:_reloadRelated(field)
-  if field.parent and self._fields[field.parent] then
-    self._fields[field.parent].nameStale = true
-    self._loadQueue[#self._loadQueue + 1] = field.parent
-  end
-
+-- parent nil means root.
+function CRSFSession:_queueValueFields(parent, exceptId)
   for fieldId = self.fieldsCount, 1, -1 do
-    local sibling = self._fields[fieldId]
-    if sibling and fieldId ~= field.id and sibling.parent == field.parent then
-      local siblingType = sibling.type or 99
+    local child = self._fields[fieldId]
+    if child and fieldId ~= exceptId and child.parent == parent then
+      local childType = child.type or 99
       if
-        siblingType < crsf.CONST.FIELD_FOLDER
-        or siblingType == crsf.CONST.FIELD_INFO
-        or siblingType == crsf.CONST.FIELD_COMMAND
+        childType < crsf.CONST.FIELD_FOLDER
+        or childType == crsf.CONST.FIELD_INFO
+        or childType == crsf.CONST.FIELD_COMMAND
       then
-        sibling.dirty = true
-        sibling.reloading = true
+        child.dirty = true
+        child.reloading = true
         self._loadQueue[#self._loadQueue + 1] = fieldId
       end
     end
   end
+end
+
+-- Parent name may embed values; siblings can hide or change options
+function CRSFSession:_reloadRelated(field)
+  local parent = field.parent and self._fields[field.parent]
+  if parent then
+    parent.nameStale = true
+    self._loadQueue[#self._loadQueue + 1] = field.parent
+    self._staleFolder = parent.parent or 0
+  end
+
+  self:_queueValueFields(field.parent, field.id)
 
   field.dirty = true
   field.reloading = true

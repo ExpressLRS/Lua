@@ -558,7 +558,7 @@ local rxDevice = {
   serialNo = CRSF.ELRS_SERIAL_ID,
   hwVer = 0,
   swVer = 0x00040100, -- 4.1.0
-  fieldCount = 26,
+  fieldCount = 29,
   params = {
     {
       id = 1,
@@ -705,6 +705,25 @@ local rxDevice = {
         local o = findParam(device, 20)
         if o then
           o.value = ((o.value or 0) + 1) % 4
+        end
+      end,
+    },
+    -- COMMAND that changes a value one folder up (ExpressLRS #3727)
+    { id = 27, parent = 19, type = CRSF.INFO, name = "Status", value = "!Level cal." },
+    { id = 28, parent = 19, type = CRSF.FOLDER, name = "IMU Calibration" },
+    {
+      id = 29,
+      parent = 28,
+      type = CRSF.COMMAND,
+      name = "Level Calibration",
+      status = CRSF.CMD_IDLE,
+      timeout = 200,
+      info = "",
+      progress = { "Calibrating..." },
+      onComplete = function(device, findParam)
+        local s = findParam(device, 27)
+        if s then
+          s.value = "Running"
         end
       end,
     },
