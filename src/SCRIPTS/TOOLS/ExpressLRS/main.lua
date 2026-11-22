@@ -71,7 +71,11 @@ function App.enterFolder(folderId, folderName, viewState)
 end
 
 function App.goBack()
-  return Navigation.goBack()
+  local entry = Navigation.goBack()
+  if entry and entry.type == Navigation.TYPE_FOLDER then
+    session:reloadFolderIfStale(Navigation.getCurrent())
+  end
+  return entry
 end
 
 function App.reloadAtRoot()
